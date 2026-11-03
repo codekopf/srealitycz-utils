@@ -58,6 +58,11 @@
     eq(text('none'), 'Cena na vyžádání', 'text without price');
     eq(text('area'), 'Prodej rodinného domu 180 m², pozemek 1 068 m²', 'area untouched in m²');
     eq(text('perm2'), `${fmt(5000, 'EUR')}/m²`, 'price per m²');
+    const title = id => document.querySelector(`#${id} p`).textContent;
+    eq(title('flat124'), `Prodej bytu 4+1 124 m² - ${fmt(2000, 'EUR')}/m²`, 'title with price per m²');
+    eq(title('land'), `Prodej pozemku 1 000 m² - ${fmt(60, 'EUR')}/m²`, 'title of a listing priced per m²');
+    eq(title('noprice'), 'Prodej bytu 3+kk 80 m²', 'title without price per m²');
+    eq(document.querySelector('#flat124 p').title, 'Prodej bytu 4+1 124 m²', 'title tooltip without price per m²');
 
     await chrome.storage.sync.set({currency: 'USD'});
     eq(text('main'), fmt(1095000, 'USD'), 'switch to USD');
@@ -65,7 +70,7 @@
     await chrome.storage.sync.set({unit: 'ft²'});
     eq(buttons(), 'CZK EUR USD* m² ft²*', 'ft² pressed');
     eq(text('area'), `Prodej rodinného domu ${sqft(180)}, pozemek ${sqft(1068)}`, 'area in ft²');
-    eq(document.querySelector('#flat124 p').textContent, `Prodej bytu 4+1 ${sqft(124)}`, 'layout 4+1 is not part of the area');
+    eq(title('flat124'), `Prodej bytu 4+1 ${sqft(124)} - ${fmt(2500 / 10.7639, 'USD')}/ft²`, 'layout 4+1 is not part of the area; title price per ft²');
     eq(text('perm2'), `${fmt(6250 / 10.7639, 'USD')}/ft²`, 'price per ft²');
 
     await chrome.storage.sync.set({currency: 'CZK'});
@@ -76,6 +81,7 @@
     await chrome.storage.sync.set({unit: 'm²'});
     eq(text('area'), 'Prodej rodinného domu 180 m², pozemek 1 068 m²', 'back to m²');
     eq(text('perm2'), '125 000 Kč/m²', 'per m² restored');
+    eq(title('flat124'), `Prodej bytu 4+1 124 m² - ${fmt(50000, 'CZK')}/m²`, 'title price per m² in CZK');
 
     pick('KZT');
     eq(buttons(), 'CZK EUR USD KZT* m²* ft²', 'KZT added as favorite and selected');
