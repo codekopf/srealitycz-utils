@@ -18,14 +18,16 @@ let currency, money; // the currency shown (settings.currency if its rate is kno
 
 const num = (int, dec) => Number(`${int.replace(/\D/g, '')}.${dec || 0}`);
 
+// Kč, or Kč per m², in the shown currency and unit: "€899,384", "€4,524/m²", "€420/ft²"
+function formatPrice(czk, perM2) {
+  const {rate, amount} = rates[currency];
+  return money.format(czk * amount / rate / (perM2 && settings.unit === 'ft²' ? SQFT_PER_M2 : 1)) + (perM2 ? `/${settings.unit}` : '');
+}
+
 function convert(text) {
   const sqft = settings.unit === 'ft²';
   return text
-    .replace(PRICE, (m, int, dec, perM2) => {
-      if (currency === 'CZK' && !(perM2 && sqft)) return m;
-      const {rate, amount} = rates[currency];
-      return money.format(num(int, dec) * amount / rate / (perM2 && sqft ? SQFT_PER_M2 : 1)) + (perM2 ? `/${settings.unit}` : '');
-    })
+    .replace(PRICE, (m, int, dec, perM2) => currency === 'CZK' && !(perM2 && sqft) ? m : formatPrice(num(int, dec), perM2))
     .replace(AREA, (m, int, dec) => sqft ? `${areaFormat.format(num(int, dec) * SQFT_PER_M2)} ft²` : m);
 }
 
@@ -38,7 +40,10 @@ function convertNode(node) {
     s = {orig: node.data};
     state.set(node, s);
   }
-  s.shown = convert(s.orig);
+  // listing titles ("Prodej bytu 3+kk 68 m²", the card's first <p>) get " - €4,524/m²"; read before s.shown changes
+  const card = el.closest('[data-e2e="estates-list"] > li');
+  const perM2 = card?.querySelector('p') === el ? pricePerM2(card) : Infinity;
+  s.shown = convert(s.orig) + (perM2 < Infinity ? ` - ${formatPrice(perM2, true)}` : '');
   if (node.data === s.shown) return;
   node.data = s.shown;
   const orig = s.orig.trim();

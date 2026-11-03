@@ -36,6 +36,11 @@ Every sreality.cz page gets two bubbles in the bottom-left corner.
   Prices per m² become prices per ft² (`125 000 Kč/m²` → `€477/ft²`).
 - Click **m²** to show the original areas again.
 
+**Price per m² in search results**
+
+Each listing title in search results ends with its price per m² (or ft²) in the chosen currency,
+for example `Prodej bytu 3+kk 68 m² - €4,524/m²`. Listings without a price show no price per m².
+
 **Sort: Od nejlevnější za m²/ft² (local)**
 
 Sreality's own `Od nejlevnější za m²` needs a premium account. The extension adds **Od nejlevnější za m²/ft² (local)**
