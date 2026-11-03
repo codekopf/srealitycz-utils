@@ -9,6 +9,7 @@
 <p id="none">Cena na vyžádání</p>
 <p id="area">Prodej rodinného domu 180&nbsp;m², pozemek 1&nbsp;068&nbsp;m²</p>
 <p id="perm2">125 000 Kč/m²</p>
+<ul data-e2e="estates-list" style="display:flex"><li id="flat124"><p>Prodej bytu 4+1 124&nbsp;m²</p><p>Praha 5</p><p>6&nbsp;200&nbsp;000&nbsp;Kč</p></li><li id="flat50"><p>Prodej bytu 2+kk 50&nbsp;m²</p><p>4&nbsp;000&nbsp;000&nbsp;Kč</p></li><li id="noprice"><p>Prodej bytu 3+kk 80&nbsp;m²</p><p>Cena na vyžádání</p></li><li id="land"><p>Prodej pozemku 1&nbsp;000&nbsp;m²</p><p>1&nbsp;500&nbsp;Kč/m²</p></li></ul>
 <script>
   const listeners = [];
   const store = {};
@@ -64,6 +65,7 @@
     await chrome.storage.sync.set({unit: 'ft²'});
     eq(buttons(), 'CZK EUR USD* m² ft²*', 'ft² pressed');
     eq(text('area'), `Prodej rodinného domu ${sqft(180)}, pozemek ${sqft(1068)}`, 'area in ft²');
+    eq(document.querySelector('#flat124 p').textContent, `Prodej bytu 4+1 ${sqft(124)}`, 'layout 4+1 is not part of the area');
     eq(text('perm2'), `${fmt(6250 / 10.7639, 'USD')}/ft²`, 'price per ft²');
 
     await chrome.storage.sync.set({currency: 'CZK'});
@@ -97,6 +99,23 @@
     document.getElementById('main').firstChild.data = '1 000 Kč'; // React updating the text node
     await tick();
     eq(text('main'), fmt(40, 'EUR'), 'text re-rendered by the site');
+
+    const menu = document.body.appendChild(document.createElement('div')); // the site mounts the sort menu when it opens
+    menu.innerHTML = '<ul><li data-e2e="-date" tabindex="0" class="selected">Od nejnovější<svg></svg></li><li data-e2e="price_asc" tabindex="0" class="option">Od nejlevnější</li>'
+      + '<li data-e2e="price_m2_desc" class="disabled">Od nejdražší za m²</li><li data-e2e="nearest" tabindex="0" class="option">Od nejbližší</li></ul>';
+    menu.addEventListener('keydown', e => e.key === 'Escape' && menu.remove()); // like MUI
+    await tick();
+    eq([...menu.querySelectorAll('li')].map(li => li.dataset.e2e).join(), '-date,price_asc,price_m2_desc,price_m2_asc_local,nearest', 'local sort option added');
+    const option = menu.querySelector('[data-e2e="price_m2_asc_local"]');
+    eq(option?.className, 'option', 'local sort option looks like an unselected option');
+    option?.click();
+    const list = document.querySelector('[data-e2e="estates-list"]');
+    const order = () => [...list.children].sort((a, b) => a.style.order - b.style.order).map(li => li.id).join();
+    eq(order(), 'land,flat124,flat50,noprice', 'sorted by price per m² from the original CZK texts, no price last');
+    eq(menu.isConnected, false, 'menu closed after sorting');
+    list.append(document.createElement('li'));
+    await tick();
+    eq([...list.children].map(li => li.style.order).join(''), '', 'local order dropped when the site changes the list');
 
     document.title = failures.length ? 'FAIL' : 'PASS';
     document.body.insertAdjacentHTML('beforeend', `<pre>${document.title}\n${failures.join('\n')}</pre>`);
