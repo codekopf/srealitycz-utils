@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Sreality Price Converter",
+  "version": "1.0.0",
+  "description": "Shows sreality.cz prices in EUR or USD using the Czech National Bank's daily exchange rate.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://api.cnb.cz/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.sreality.cz/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
