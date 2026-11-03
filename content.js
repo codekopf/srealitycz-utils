@@ -1,7 +1,8 @@
 // Rewrites CZK prices on sreality.cz into another currency and m² into ft², with two switchers in the bottom-left corner.
 // "21 900 000 Kč", "25 000 Kč/měsíc", "121 667 Kč/m²", "1 234,50 Kč", "180 m²"; sreality separates thousands with a no-break space.
 // shortcut: abbreviated amounts like "30 tis. Kč" stay in CZK, handle them if they show up in prices.
-const NUM = String.raw`(?<![\d,.])(\d{1,3}(?:[   ]\d{3})+|\d+)(?:,(\d+))?[   ]?`;
+// Nor after "4+": "Prodej bytu 4+1 124 m²" has 124 m², not 1 124 m².
+const NUM = String.raw`(?<![\d,.]|\d\+)(\d{1,3}(?:[   ]\d{3})+|\d+)(?:,(\d+))?[   ]?`;
 const PRICE = new RegExp(NUM + 'Kč(/m²)?', 'g');
 const AREA = new RegExp(NUM + 'm²', 'g');
 const SQFT_PER_M2 = 10.7639;
@@ -49,6 +50,45 @@ function walk(root) {
   if (root.nodeType === Node.TEXT_NODE) return convertNode(root);
   const it = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n; (n = it.nextNode());) convertNode(n);
+}
+
+// Sorting by price per m² on sreality needs a premium account, so this sorts the listings already on the page.
+const LOCAL_SORT = 'price_m2_asc_local';
+
+// From the original texts ("Prodej bytu 4+1 124 m²", "18 060 650 Kč" or "1 500 Kč/m²"); listings without a price or area go last.
+function pricePerM2(card) {
+  const it = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
+  let text = '';
+  for (let n; (n = it.nextNode());) {
+    const s = state.get(n);
+    text += (s && n.data === s.shown ? s.orig : n.data) + '\n'; // \n keeps "Praha 5" and "18 060 650 Kč" apart
+  }
+  const [price] = text.matchAll(PRICE), [area] = text.matchAll(AREA);
+  if (price?.[3]) return num(price[1], price[2]); // already per m²
+  return price && area ? num(price[1], price[2]) / num(area[1], area[2]) : Infinity;
+}
+
+// CSS order keeps the DOM as React left it, so React can still re-render the list correctly.
+function sortListings() {
+  const list = document.querySelector('[data-e2e="estates-list"]');
+  if (!list) return;
+  [...list.children].map(li => [pricePerM2(li), li]).sort((a, b) => a[0] - b[0]).forEach(([, li], i) => li.style.order = i);
+}
+
+// The sort menu (#estates-sorter-menu) mounts on open, with one <li data-e2e="price_asc"> etc. per option.
+function addSortOption(root) {
+  const last = root.querySelector?.('li[data-e2e="price_m2_desc"]');
+  if (!last || last.parentElement.querySelector(`[data-e2e="${LOCAL_SORT}"]`)) return;
+  // copy the look of an enabled, unselected option (the selected one has a check mark, premium ones are disabled for free accounts)
+  const look = [...last.parentElement.children].find(li => li.dataset.e2e && li.tabIndex === 0 && !li.querySelector('svg')) || last;
+  const li = Object.assign(document.createElement('li'), {className: look.className, tabIndex: 0, textContent: 'Od nejlevnější za m²/ft² (local)'});
+  li.dataset.e2e = LOCAL_SORT;
+  li.addEventListener('click', () => {
+    sortListings();
+    li.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})); // closes the MUI menu
+  });
+  li.addEventListener('keydown', e => (e.code === 'Enter' || e.code === 'Space') && li.click());
+  last.after(li);
 }
 
 const host = document.createElement('div');
@@ -128,9 +168,18 @@ Promise.all([
   else ratesError = r?.error;
   document.body.append(host);
   render();
+  addSortOption(document.body); // the mobile sort drawer stays mounted, so it may be in the page already
   // sreality is a React app: listings load and re-render after page load
   new MutationObserver(muts => {
-    for (const m of muts) m.type === 'characterData' ? convertNode(m.target) : m.addedNodes.forEach(walk);
+    for (const m of muts) {
+      if (m.type === 'characterData') {
+        convertNode(m.target);
+        continue;
+      }
+      m.addedNodes.forEach(n => { walk(n); addSortOption(n); });
+      // the site loaded or re-sorted listings: drop the local order, it no longer matches
+      if (m.target.dataset?.e2e === 'estates-list') for (const li of m.target.children) li.style.order = '';
+    }
   }).observe(document.body, {childList: true, subtree: true, characterData: true});
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
