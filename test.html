@@ -1,0 +1,61 @@
+<!doctype html>
+<!-- Self-check for content.js with chrome.* stubbed out. Serve this folder (e.g. `python3 -m http.server`) and open /test.html. -->
+<meta charset="utf-8">
+<title>content.js test</title>
+<p id="main">21&nbsp;900&nbsp;000&nbsp;Kč</p>
+<p id="rent">Nájem 25 000 Kč/měsíc, poplatky 3 500 Kč</p>
+<p id="year">Rok 2019 250 000 Kč</p>
+<p id="dec">1&nbsp;234,50&nbsp;Kč</p>
+<p id="none">Cena na vyžádání</p>
+<script>
+  const listeners = [];
+  const store = {currency: 'EUR'};
+  window.chrome = {
+    storage: {
+      sync: {
+        get: async defaults => ({...defaults, ...store}),
+        set: async v => { Object.assign(store, v); listeners.forEach(l => l({currency: {newValue: v.currency}})); },
+      },
+      onChanged: {addListener: l => listeners.push(l)},
+    },
+    runtime: {sendMessage: async () => ({EUR: 25, USD: 20, validFor: '2026-11-02'})},
+  };
+</script>
+<script src="content.js"></script>
+<script>
+  const fmt = (n, c) => new Intl.NumberFormat(undefined, {style: 'currency', currency: c, maximumFractionDigits: 0}).format(n);
+  const text = id => document.getElementById(id).textContent;
+  const tick = () => new Promise(r => setTimeout(r, 20));
+  const failures = [];
+  const eq = (actual, expected, what) => actual === expected || failures.push(`${what}: got "${actual}", want "${expected}"`);
+
+  (async () => {
+    await tick();
+    eq(text('main'), fmt(876000, 'EUR'), 'main price');
+    eq(document.getElementById('main').title, '21 900 000 Kč', 'original price tooltip');
+    eq(text('rent'), `Nájem ${fmt(1000, 'EUR')}/měsíc, poplatky ${fmt(140, 'EUR')}`, 'two prices in one text');
+    eq(text('year'), `Rok 2019 ${fmt(10000, 'EUR')}`, 'year before price');
+    eq(text('dec'), fmt(49.38, 'EUR'), 'decimal comma');
+    eq(text('none'), 'Cena na vyžádání', 'text without price');
+
+    await chrome.storage.sync.set({currency: 'USD'});
+    eq(text('main'), fmt(1095000, 'USD'), 'switch to USD');
+
+    await chrome.storage.sync.set({currency: 'CZK'});
+    eq(text('main'), '21 900 000 Kč', 'switch back to CZK');
+    eq(document.getElementById('main').hasAttribute('title'), false, 'tooltip removed in CZK');
+
+    await chrome.storage.sync.set({currency: 'EUR'});
+    const p = document.body.appendChild(document.createElement('p'));
+    p.textContent = '5 000 000 Kč';
+    await tick();
+    eq(p.textContent, fmt(200000, 'EUR'), 'listing added later');
+
+    document.getElementById('main').firstChild.data = '1 000 Kč'; // React updating the text node
+    await tick();
+    eq(text('main'), fmt(40, 'EUR'), 'text re-rendered by the site');
+
+    document.title = failures.length ? 'FAIL' : 'PASS';
+    document.body.insertAdjacentHTML('beforeend', `<pre>${document.title}\n${failures.join('\n')}</pre>`);
+  })();
+</script>
