@@ -7,23 +7,36 @@
 <p id="year">Rok 2019 250 000 Kč</p>
 <p id="dec">1&nbsp;234,50&nbsp;Kč</p>
 <p id="none">Cena na vyžádání</p>
+<p id="area">Prodej rodinného domu 180&nbsp;m², pozemek 1&nbsp;068&nbsp;m²</p>
+<p id="perm2">125 000 Kč/m²</p>
 <script>
   const listeners = [];
-  const store = {currency: 'EUR'};
+  const store = {};
   window.chrome = {
     storage: {
       sync: {
-        get: async defaults => ({...defaults, ...store}),
-        set: async v => { Object.assign(store, v); listeners.forEach(l => l({currency: {newValue: v.currency}})); },
+        get: async defaults => structuredClone({...defaults, ...store}),
+        set: async v => {
+          Object.assign(store, v);
+          const changes = Object.fromEntries(Object.entries(v).map(([k, newValue]) => [k, {newValue}]));
+          listeners.forEach(l => l(changes, 'sync'));
+        },
       },
       onChanged: {addListener: l => listeners.push(l)},
     },
-    runtime: {sendMessage: async () => ({EUR: 25, USD: 20, validFor: '2026-11-02'})},
+    runtime: {
+      sendMessage: async () => ({
+        EUR: {rate: 25, amount: 1, validFor: '2026-11-03', source: 'ČNB'},
+        USD: {rate: 20, amount: 1, validFor: '2026-11-03', source: 'ČNB'},
+        KZT: {rate: 1, amount: 20, validFor: '2026-11-03', source: 'Rates By Exchange Rate API'},
+      }),
+    },
   };
 </script>
 <script src="content.js"></script>
 <script>
-  const fmt = (n, c) => new Intl.NumberFormat(undefined, {style: 'currency', currency: c, maximumFractionDigits: 0}).format(n);
+  const fmt = (n, c) => new Intl.NumberFormat(c === 'CZK' ? 'cs-CZ' : undefined, {style: 'currency', currency: c, maximumFractionDigits: 0}).format(n);
+  const sqft = m2 => `${new Intl.NumberFormat(undefined, {maximumFractionDigits: 0}).format(m2 * 10.7639)} ft²`;
   const text = id => document.getElementById(id).textContent;
   const tick = () => new Promise(r => setTimeout(r, 20));
   const failures = [];
@@ -31,21 +44,51 @@
 
   (async () => {
     await tick();
+    const ui = [...document.body.children].find(e => e.shadowRoot).shadowRoot;
+    const buttons = () => [...ui.querySelectorAll('button')].map(b => b.textContent + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')).join(' ');
+    const pick = c => { const s = ui.querySelector('select'); s.value = c; s.dispatchEvent(new Event('change')); };
+
+    eq(buttons(), 'CZK EUR* USD m²* ft²', 'default buttons');
     eq(text('main'), fmt(876000, 'EUR'), 'main price');
     eq(document.getElementById('main').title, '21 900 000 Kč', 'original price tooltip');
     eq(text('rent'), `Nájem ${fmt(1000, 'EUR')}/měsíc, poplatky ${fmt(140, 'EUR')}`, 'two prices in one text');
     eq(text('year'), `Rok 2019 ${fmt(10000, 'EUR')}`, 'year before price');
     eq(text('dec'), fmt(49.38, 'EUR'), 'decimal comma');
     eq(text('none'), 'Cena na vyžádání', 'text without price');
+    eq(text('area'), 'Prodej rodinného domu 180 m², pozemek 1 068 m²', 'area untouched in m²');
+    eq(text('perm2'), `${fmt(5000, 'EUR')}/m²`, 'price per m²');
 
     await chrome.storage.sync.set({currency: 'USD'});
     eq(text('main'), fmt(1095000, 'USD'), 'switch to USD');
 
+    await chrome.storage.sync.set({unit: 'ft²'});
+    eq(buttons(), 'CZK EUR USD* m² ft²*', 'ft² pressed');
+    eq(text('area'), `Prodej rodinného domu ${sqft(180)}, pozemek ${sqft(1068)}`, 'area in ft²');
+    eq(text('perm2'), `${fmt(6250 / 10.7639, 'USD')}/ft²`, 'price per ft²');
+
     await chrome.storage.sync.set({currency: 'CZK'});
+    eq(text('perm2'), `${fmt(125000 / 10.7639, 'CZK')}/ft²`, 'CZK price per ft²');
     eq(text('main'), '21 900 000 Kč', 'switch back to CZK');
     eq(document.getElementById('main').hasAttribute('title'), false, 'tooltip removed in CZK');
 
-    await chrome.storage.sync.set({currency: 'EUR'});
+    await chrome.storage.sync.set({unit: 'm²'});
+    eq(text('area'), 'Prodej rodinného domu 180 m², pozemek 1 068 m²', 'back to m²');
+    eq(text('perm2'), '125 000 Kč/m²', 'per m² restored');
+
+    pick('KZT');
+    eq(buttons(), 'CZK EUR USD KZT* m²* ft²', 'KZT added as favorite and selected');
+    eq(text('main'), fmt(438000000, 'KZT'), 'price in KZT (rate as units per 1 Kč)');
+    eq(ui.querySelector('.pill').title, 'Rates By Exchange Rate API, 2026-11-03: 20 KZT = 1 Kč', 'rate tooltip with source');
+    eq([...ui.querySelectorAll('optgroup')].map(g => g.label + ':' + [...g.children].map(o => o.value)).join(' '), 'Add: Remove:EUR,USD,KZT', 'picker groups');
+
+    pick('KZT');
+    eq(buttons(), 'CZK* EUR USD m²* ft²', 'removing the shown currency falls back to CZK');
+    eq(ui.querySelector('optgroup option').text, `KZT – ${new Intl.DisplayNames(undefined, {type: 'currency'}).of('KZT')}`, 'picker shows currency name');
+    pick('EUR');
+    eq(buttons(), 'CZK* USD m²* ft²', 'EUR removed');
+    pick('EUR');
+    eq(buttons(), 'CZK USD EUR* m²* ft²', 'EUR added back at the end');
+
     const p = document.body.appendChild(document.createElement('p'));
     p.textContent = '5 000 000 Kč';
     await tick();

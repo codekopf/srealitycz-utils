@@ -1,7 +1,7 @@
-# Sreality Price Converter
+# Sreality utility Google Chrome extension
 
-Chrome extension that shows prices on [sreality.cz](https://www.sreality.cz/) in **EUR** or **USD** instead of CZK,
-using the daily exchange rate of the Czech National Bank (ČNB).
+Chrome extension for [sreality.cz](https://www.sreality.cz/) that shows prices in **EUR**, **USD** or about 160 other currencies
+at the daily exchange rate, instead of CZK, and areas in **ft²** instead of m².
 
 It works on search results and on listing detail pages
 (e.g. https://www.sreality.cz/detail/prodej/dum/rodinny/praha-chodov-medkova/2503409740).
@@ -10,38 +10,59 @@ It works on search results and on listing detail pages
 
 1. Open `chrome://extensions` in Chrome.
 2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and select this `sreality-price-converter` folder.
+3. Click **Load unpacked** and select this `srealitycz-utils` folder.
 4. Reload any open sreality.cz tabs.
 
 After changing the code, click the reload icon on the extension's card in `chrome://extensions` and reload the sreality.cz tab.
 
 ## Use
 
-Every sreality.cz page gets a small **CZK | EUR | USD** switcher in the bottom-left corner.
+Every sreality.cz page gets two bubbles in the bottom-left corner.
 
-- Click **EUR** or **USD** to convert every price on the page, for example `21 900 000 Kč` → `€899,384`.
+**Currency bubble: CZK | EUR | USD | +**
+
+- Click a currency to convert every price on the page, for example `21 900 000 Kč` → `€899,384`.
   This works on search results, detail pages, rents (`Kč/měsíc`) and prices per m².
-- Click **CZK** to show the original prices again.
-- Hover a converted price to see the original CZK amount.
-- Hover the switcher to see the rate used and its date, for example `ČNB rate of 2026-11-02: 1 EUR = 24.35 Kč`.
+- Click **CZK** (always first) to show the original prices again.
+- Click **+** to manage your favorite currencies:
+  - **Add** lists every available currency (about 160, e.g. `KZT – Kazakhstani Tenge`, `UAH – Ukrainian Hryvnia`).
+    Picking one adds it to the bubble and switches to it.
+  - **Remove** lists your favorites. Picking one removes it from the bubble.
+- Hover the bubble to see the rate in use and where it comes from, for example `ČNB, 2026-11-02: 1 EUR = 24.35 Kč`.
 
-The choice is remembered and applies to all sreality.cz tabs. The default is EUR.
+**Unit bubble: m² | ft²**
 
-## How it works
+- Click **ft²** to show every area in square feet, for example `180 m²` → `1,938 ft²`.
+  Prices per m² become prices per ft² (`125 000 Kč/m²` → `€477/ft²`).
+- Click **m²** to show the original areas again.
 
-- `background.js` fetches the rates from `https://api.cnb.cz/cnbapi/exrates/daily` and caches them for 3 hours.
-  ČNB publishes a new rate around 14:30 CET on working days. If ČNB can't be reached, the last cached rate is used.
-  If no rate was ever fetched, EUR and USD are greyed out.
-- `content.js` replaces every `… Kč` amount in the page text and keeps watching the page,
-  so results loaded later (scrolling, filters, paging) are converted too.
-- Abbreviated amounts such as `30 tis. Kč` are left in CZK.
+Hover any converted price or area to see the original text.
+Your choices are remembered and apply to all sreality.cz tabs. The defaults are EUR and m².
+
+## Exchange rates
+
+All rates are daily:
+
+- EUR, USD, GBP, CHF, PLN, HUF and the other ~30 main currencies use the official rate of the Czech National Bank (ČNB),
+  published around 14:30 CET on working days.
+- All other currencies (KZT, UAH, ...) use [Rates By Exchange Rate API](https://www.exchangerate-api.com)
+  (free `open.er-api.com` endpoint, updated once a day around 00:00 UTC). ČNB publishes these only once a month.
+
+`background.js` fetches both and caches them for 3 hours.
+If ČNB can't be reached, the last cached rates are used. If ExchangeRate-API can't be reached,
+the last cached rates of the other currencies are kept. If no rate was ever fetched, only CZK is available.
+
+## Limitations
+
+- Abbreviated amounts such as `30 tis. Kč` stay in CZK.
+- Energy figures such as `kWh/m²` are not converted to ft².
 
 ## Test
 
 Serve this folder and open `test.html`. Its title shows `PASS` or `FAIL`:
 
 ```bash
-python3 -m http.server 8000 --directory sreality-price-converter
+python3 -m http.server 8000 --directory srealitycz-utils
 ```
 
 Then open http://localhost:8000/test.html.
