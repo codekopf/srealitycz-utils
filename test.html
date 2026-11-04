@@ -72,7 +72,7 @@
   (async () => {
     await tick();
     const ui = [...document.body.children].find(e => e.shadowRoot).shadowRoot;
-    const buttons = () => [...ui.querySelectorAll('button')].map(b => b.textContent + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')).join(' ');
+    const buttons = () => [...ui.querySelectorAll('button[data-key]')].map(b => b.textContent + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')).join(' ');
     const pick = c => { const s = ui.querySelector('select'); s.value = c; s.dispatchEvent(new Event('change')); };
 
     eq(buttons(), 'CZK EUR* USD m²* ft²', 'default buttons');
@@ -132,25 +132,32 @@
     await tick();
     eq(text('main'), fmt(40, 'EUR'), 'text re-rendered by the site');
 
-    const menu = document.body.appendChild(document.createElement('div')); // the site mounts the sort menu when it opens
-    menu.innerHTML = '<ul><li data-e2e="-date" tabindex="0" class="selected">Od nejnovější<svg></svg></li><li data-e2e="price_asc" tabindex="0" class="option">Od nejlevnější</li>'
-      + '<li data-e2e="price_m2_desc" class="disabled">Od nejdražší za m²</li><li data-e2e="nearest" tabindex="0" class="option">Od nejbližší</li></ul>';
-    menu.addEventListener('keydown', e => e.key === 'Escape' && menu.remove()); // like MUI
-    await tick();
-    eq([...menu.querySelectorAll('li')].map(li => li.dataset.e2e).join(), '-date,price_asc,price_m2_desc,price_m2_asc_local,nearest', 'local sort option added');
-    const option = menu.querySelector('[data-e2e="price_m2_asc_local"]');
-    eq(option?.className, 'option', 'local sort option looks like an unselected option');
-    option?.click();
-    const list = document.querySelector('[data-e2e="estates-list"]');
-    const order = () => [...list.children].sort((a, b) => a.style.order - b.style.order).map(li => li.id).join();
-    eq(order(), 'land,flat124,estate-list-item-50,noprice', 'sorted by price per m² from the original CZK texts, no price last');
-    eq(menu.isConnected, false, 'menu closed after sorting');
-    list.append(document.createElement('li'));
-    await tick();
-    eq([...list.children].map(li => li.style.order).join(''), '', 'local order dropped when the site changes the list');
-
     const [limitPill] = [...ui.querySelectorAll('.pill')].slice(-1);
-    const [limitSelect, pageSelect] = limitPill.children;
+    const [limitSelect, pageSelect, sortButton] = limitPill.children;
+    const list = document.querySelector('[data-e2e="estates-list"]');
+    const order = l => [...l.children].sort((a, b) => a.style.order - b.style.order).map(li => li.id).join();
+    const sortShown = () => `${sortButton.textContent} ${sortButton.getAttribute('aria-pressed')}`;
+    eq(sortShown(), '⇅ m² false', 'sort button off');
+    eq([...list.children].map(li => li.style.order).join(''), '', "sreality's order");
+    sortButton.click();
+    await tick();
+    eq(sortShown(), '⇅ asc m² true', 'sort button ascending');
+    eq(sortButton.ariaLabel, 'Sort the listings on this page by price per m²: cheapest first', 'sort button label');
+    eq(order(list), 'land,flat124,estate-list-item-50,noprice', 'sorted by price per m² from the original CZK texts, no price last');
+    sortButton.click();
+    await tick();
+    eq(sortShown(), '⇅ desc m² true', 'sort button descending');
+    eq(order(list), 'estate-list-item-50,flat124,land,noprice', 'most expensive per m² first, no price still last');
+    list.append(Object.assign(document.createElement('li'), {id: 'added'}));
+    list.prepend(document.getElementById('land')); // the site re-sorting
+    await tick();
+    eq(order(list), 'estate-list-item-50,flat124,land,noprice,added', 'listings the site adds or moves are sorted too');
+    await chrome.storage.sync.set({unit: 'ft²'});
+    eq(sortShown(), '⇅ desc ft² true', 'sort button follows the unit');
+    await chrome.storage.sync.set({unit: 'm²'});
+    sortButton.click();
+    await tick();
+    eq(`${sortShown()} ${[...list.children].map(li => li.style.order).join('')}`, '⇅ m² false ', "third click: sreality's order back");
     const pages = () => `${pageSelect.value}/${pageSelect.options.length}`;
     const apiCall = () => new URL(fetched.findLast(u => u.startsWith('/api/')), location.href).searchParams;
     const ours = () => document.querySelector('[data-sru]');
@@ -177,13 +184,15 @@
     eq([...card('sru-1').querySelectorAll('img')].map(i => i.getAttribute('src') + (i.srcset ? ' srcset' : '')).join(), '//img.test/1.png?fl=res,800', 'first photo only, template size');
     eq(card('sru-1').querySelectorAll('button, .MuiChip-root').length, 0, 'no dead buttons or template badges');
     eq(card('sru-2').querySelectorAll('img').length, 0, 'no photo, no image');
-    sortListings();
-    eq([...ours().children].sort((a, b) => a.style.order - b.style.order).map(li => li.id).join(), 'sru-2,sru-1,sru-3', 'local sort sorts the shown list');
+    await chrome.storage.sync.set({sort: 'asc'});
+    eq(order(ours()), 'sru-2,sru-1,sru-3', 'local sort sorts the shown list');
 
     history.replaceState(null, '', '/hledani/prodej/byty?strana=9'); // sreality changing the URL without reloading
     document.body.append(document.createElement('div'));
     await tick();
     eq(`${apiCall().get('offset')} ${pages()}`, '1750 8/8', 'URL change reloads; page 9 of 8 shows the last page');
+    eq(order(ours()), 'sru-2,sru-1,sru-3', 'reloaded listings sorted too');
+    await chrome.storage.sync.set({sort: ''});
     eq(pageUrl(3).replace(location.origin, ''), '/hledani/prodej/byty?strana=3', 'page 3 link');
     eq(pageUrl(1).replace(location.origin, ''), '/hledani/prodej/byty', 'page 1 link');
 

@@ -22,7 +22,7 @@ After changing the code, click the reload icon on the extension's card in `chrom
 
 ## Use
 
-Every sreality.cz page gets bubbles in the bottom-left corner: currency and unit everywhere, plus pages on search results.
+Every sreality.cz page gets bubbles in the bottom-left corner: currency and unit everywhere, plus listings on search results.
 
 **Currency bubble: CZK | EUR | USD | +**
 
@@ -41,7 +41,7 @@ Every sreality.cz page gets bubbles in the bottom-left corner: currency and unit
   Prices per m² become prices per ft² (`125 000 Kč/m²` → `€477/ft²`).
 - Click **m²** to show the original areas again.
 
-**Pages bubble: listings per page | page** (search results only)
+**Listings bubble: listings per page | page | ⇅ sort** (search results only)
 
 - Pick **50 / page**, **100 / page**, **250 / page** or **500 / page** to see that many listings at once.
   The listings reload, starting from page 1.
@@ -59,16 +59,22 @@ Every sreality.cz page gets bubbles in the bottom-left corner: currency and unit
 Each listing title in search results ends with its price per m² (or ft²) in the chosen currency,
 for example `Prodej bytu 3+kk 68 m² - €4,524/m²`. Listings without a price show no price per m².
 
-**Sort: Od nejlevnější za m²/ft² (local)**
+**Sort by price per m²: ⇅ m²**
 
-Sreality's own `Od nejlevnější za m²` needs a premium account. The extension adds **Od nejlevnější za m²/ft² (local)**
-to the **Řadit** menu of search results. It sorts the listings shown on the page (not the whole search) by price per m²,
-cheapest first, whatever currency and unit are shown. With 500 listings per page, it sorts those 500.
-Listings without a price or area go last.
-The order resets when other listings load (next page, another filter or sort).
+Sreality's own sorting by price per m² needs a premium account. The **⇅** button at the end of the listings bubble
+sorts the listings shown on the page (not the whole search) by price per m², whatever currency and unit are shown:
+
+- **⇅ m²**: sreality's order.
+- Click once for **⇅ asc m²**: cheapest per m² first.
+- Click again for **⇅ desc m²**: most expensive per m² first.
+- Click again for sreality's order.
+
+The button shows ft² instead of m² when areas are in ft². Listings without a price or area go last.
+The sort stays on when other listings load (next page, another filter or sreality's own sort).
+With 500 listings per page, it sorts those 500.
 
 Hover any converted price or area to see the original text.
-Your choices are remembered and apply to all sreality.cz tabs. The defaults are EUR, m² and sreality's own pages.
+Your choices are remembered and apply to all sreality.cz tabs. The defaults are EUR, m², and sreality's own pages and order.
 
 ## How listings per page work
 
