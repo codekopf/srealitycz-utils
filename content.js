@@ -8,7 +8,7 @@ const PRICE = new RegExp(NUM + 'Kč(/m²)?', 'g');
 const AREA = new RegExp(NUM + 'm²', 'g');
 const SQFT_PER_M2 = 10.7639;
 const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']);
-const DEFAULTS = {currency: 'EUR', favorites: ['EUR', 'USD'], unit: 'm²', limit: 0};
+const DEFAULTS = {currency: 'EUR', favorites: ['EUR', 'USD'], unit: 'm²', limit: 0, sort: ''};
 const state = new WeakMap(); // text node -> {orig, shown}
 const areaFormat = new Intl.NumberFormat(undefined, {maximumFractionDigits: 0});
 const currencyNames = new Intl.DisplayNames(undefined, {type: 'currency'});
@@ -59,7 +59,7 @@ function walk(root) {
 }
 
 // Sorting by price per m² on sreality needs a premium account, so this sorts the listings already on the page.
-const LOCAL_SORT = 'price_m2_asc_local';
+const NEXT_SORT = {'': 'asc', asc: 'desc', desc: ''}; // '': sreality's order
 
 // From the original texts ("Prodej bytu 4+1 124 m²", "18 060 650 Kč" or "1 500 Kč/m²"); listings without a price or area go last.
 function pricePerM2(card) {
@@ -76,25 +76,16 @@ function pricePerM2(card) {
 
 // CSS order keeps the DOM as React left it, so React can still re-render the list correctly.
 function sortListings() {
-  const list = document.querySelector('[data-e2e="estates-list"]');
-  if (!list) return;
-  [...list.children].map(li => [pricePerM2(li), li]).sort((a, b) => a[0] - b[0]).forEach(([, li], i) => li.style.order = i);
-}
-
-// The sort menu (#estates-sorter-menu) mounts on open, with one <li data-e2e="price_asc"> etc. per option.
-function addSortOption(root) {
-  const last = root.querySelector?.('li[data-e2e="price_m2_desc"]');
-  if (!last || last.parentElement.querySelector(`[data-e2e="${LOCAL_SORT}"]`)) return;
-  // copy the look of an enabled, unselected option (the selected one has a check mark, premium ones are disabled for free accounts)
-  const look = [...last.parentElement.children].find(li => li.dataset.e2e && li.tabIndex === 0 && !li.querySelector('svg')) || last;
-  const li = Object.assign(document.createElement('li'), {className: look.className, tabIndex: 0, textContent: 'Od nejlevnější za m²/ft² (local)'});
-  li.dataset.e2e = LOCAL_SORT;
-  li.addEventListener('click', () => {
-    sortListings();
-    li.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})); // closes the MUI menu
-  });
-  li.addEventListener('keydown', e => (e.code === 'Enter' || e.code === 'Space') && li.click());
-  last.after(li);
+  const dir = {asc: 1, desc: -1}[settings.sort];
+  for (const list of document.querySelectorAll(LIST)) {
+    if (!dir) {
+      for (const li of list.children) li.style.order = '';
+      continue;
+    }
+    [...list.children].map(li => [pricePerM2(li), li])
+      .sort(([a], [b]) => (a === Infinity) - (b === Infinity) || dir * (a - b) || 0) // no price or area: last either way
+      .forEach(([, li], i) => li.style.order = i);
+  }
 }
 
 // Listings per page: sreality shows 20 (+2 tips) and its URLs take no page size, but its API takes any limit.
@@ -253,11 +244,11 @@ shadow.innerHTML = `<style>
 </style><div class="bar">
   <div class="pill" role="group" aria-label="Price currency"><span></span><select aria-label="Add or remove a favorite currency"></select></div>
   <div class="pill" role="group" aria-label="Area unit"></div>
-  <div class="pill" role="group" aria-label="Pages" hidden><select aria-label="Listings per page"></select><select aria-label="Page"></select></div>
+  <div class="pill" role="group" aria-label="Listings" hidden><select aria-label="Listings per page"></select><select aria-label="Page"></select><button></button></div>
 </div>`;
 const [currencyPill, unitPill, limitPill] = shadow.querySelectorAll('.pill');
 const [favs, picker] = currencyPill.children;
-const [limitSelect, pageSelect] = limitPill.children;
+const [limitSelect, pageSelect, sortButton] = limitPill.children;
 
 function button(key, value) {
   const b = document.createElement('button');
@@ -284,6 +275,7 @@ limitSelect.addEventListener('change', async () => {
   if (currentPage() > 1) location.assign(pageUrl(1)); // a new page size starts on page 1
 });
 pageSelect.addEventListener('change', () => location.assign(pageUrl(Number(pageSelect.value))));
+sortButton.addEventListener('click', () => chrome.storage.sync.set({sort: NEXT_SORT[settings.sort]}));
 
 function renderFavorites() {
   const list = ['CZK', ...settings.favorites]; // CZK always first
@@ -306,9 +298,14 @@ function render() {
   money = new Intl.NumberFormat(currency === 'CZK' ? 'cs-CZ' : undefined, {style: 'currency', currency, maximumFractionDigits: 0});
   renderFavorites();
   limitSelect.value = settings.limit;
-  for (const b of shadow.querySelectorAll('button')) {
+  for (const b of shadow.querySelectorAll('button[data-key]')) {
     b.setAttribute('aria-pressed', b.dataset.value === (b.dataset.key === 'unit' ? settings.unit : currency));
   }
+  const {sort, unit} = settings;
+  sortButton.textContent = `⇅ ${sort ? `${sort} ` : ''}${unit}`;
+  sortButton.setAttribute('aria-pressed', !!sort);
+  sortButton.title = sortButton.ariaLabel = `Sort the listings on this page by price per ${unit}: `
+    + {'': "sreality's order", asc: 'cheapest first', desc: 'most expensive first'}[sort];
   const r = rates[currency];
   currencyPill.title = ratesError ? `Exchange rate unavailable: ${ratesError}`
     : currency === 'CZK' ? '' : `${r.source}, ${r.validFor}: ${r.amount} ${currency} = ${r.rate} Kč`;
@@ -325,24 +322,26 @@ Promise.all([
   document.body.append(host);
   render();
   refresh();
-  addSortOption(document.body); // the mobile sort drawer stays mounted, so it may be in the page already
+  sortListings();
   // sreality is a React app: listings load and re-render after page load
   new MutationObserver(muts => {
     if (location.href !== shownHref) refresh(); // sreality changed the search (filters, sort) without reloading
+    let listChanged = false;
     for (const m of muts) {
       if (m.type === 'characterData') {
         convertNode(m.target);
         continue;
       }
-      m.addedNodes.forEach(n => { walk(n); addSortOption(n); });
-      // the site loaded or re-sorted listings: drop the local order, it no longer matches
-      if (m.target.dataset?.e2e === 'estates-list') for (const li of m.target.children) li.style.order = '';
+      m.addedNodes.forEach(walk);
+      if (m.target.dataset?.e2e === 'estates-list') listChanged = true;
     }
+    if (listChanged) sortListings(); // other listings loaded (next page, filter, sreality's sort): sort them too
   }).observe(document.body, {childList: true, subtree: true, characterData: true});
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
     for (const k in changes) settings[k] = changes[k].newValue ?? DEFAULTS[k];
     render();
     if (changes.limit) refresh();
+    if (changes.sort) sortListings();
   });
 });
