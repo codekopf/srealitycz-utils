@@ -162,14 +162,32 @@ function listing(template, r) {
   const li = template.cloneNode(true);
   li.id = `sru-${r.hash_id}`;
   li.querySelectorAll('button, .MuiChip-root').forEach(e => e.remove()); // copies lose React's handlers; badges belong to the template
+  // sreality's photo carousel is React state the copy doesn't have: keep one slide and switch its photo with our own arrows
   const slides = li.querySelector('ul');
   while (slides?.children.length > 1) slides.lastElementChild.remove();
-  const image = r.advert_images?.[0];
-  for (const img of li.querySelectorAll('img')) {
+  const photos = r.advert_images || [], imgs = li.querySelectorAll('img');
+  let shown = 0;
+  const show = n => {
+    shown = (n + photos.length) % photos.length;
+    for (const img of imgs) img.src = photos[shown] + (img.getAttribute('src') || '').replace(/^[^?]*/, ''); // keeps the template's size options (?fl=res,800,600,...)
+  };
+  for (const img of imgs) {
     img.removeAttribute('srcset');
     img.style.opacity = 1; // sreality fades the photo in over a blurred thumbnail on React's onLoad, which copies don't have
-    if (image) img.src = image + (img.getAttribute('src') || '').replace(/^[^?]*/, ''); // keeps the template's size options (?fl=res,800,600,...)
-    else img.remove();
+    if (!photos.length) img.remove();
+  }
+  if (photos.length) show(0);
+  if (photos.length > 1 && slides) {
+    slides.parentElement.append(...[[-1, 'Previous photo', '‹'], [1, 'Next photo', '›']].map(([step, label, text]) => {
+      const b = Object.assign(document.createElement('button'), {type: 'button', className: `sru-photo sru-${step < 0 ? 'prev' : 'next'}`, textContent: text});
+      b.ariaLabel = label;
+      b.addEventListener('click', e => {
+        e.preventDefault(); // the card is a link
+        e.stopPropagation();
+        show(shown + step);
+      });
+      return b;
+    }));
   }
   const a = li.querySelector('a');
   // shortcut: keeps the template's category in the path and sreality redirects to the listing's own; build it from codebooks if that redirect goes away
@@ -225,7 +243,14 @@ async function refresh() {
 }
 
 document.head.append(Object.assign(document.createElement('style'), {
-  textContent: `html[data-sru-limit] :is(${LIST}:not([data-sru]), [data-e2e="pagination"]) { display: none !important; }`,
+  textContent: `html[data-sru-limit] :is(${LIST}:not([data-sru]), [data-e2e="pagination"]) { display: none !important; }
+    .sru-photo { position: absolute; top: 50%; z-index: 2; translate: 0 -50%; display: flex; align-items: center; justify-content: center;
+                 width: 32px; height: 32px; padding: 0 0 3px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .9); color: #232b3a;
+                 font: 600 24px/1 system-ui, sans-serif; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); opacity: 0; transition: opacity .2s; }
+    .sru-prev { left: 8px; }
+    .sru-next { right: 8px; }
+    li:hover .sru-photo, .sru-photo:focus-visible { opacity: 1; }
+    @media (hover: none) { .sru-photo { opacity: 1; } }`,
 }));
 
 const host = document.createElement('div');

@@ -108,7 +108,7 @@ the last cached rates of the other currencies are kept. If no rate was ever fetc
 - Listings per page relies on sreality's internal API and page data, which may change with any sreality release.
 - With a page size chosen:
   - every page change reloads the page, and sreality's own listings show briefly before the new ones;
-  - the cards have one photo and no save (heart) button or badges such as `TIP`;
+  - the cards browse their photos with the extension's own ‹ › arrows and have no save (heart) button or badges such as `TIP`;
   - sreality's tips (promoted listings) are not shown;
   - price texts are in Czech (`Kč/měsíc`, `Cena na vyžádání`) also on the English site;
   - a card's link goes through one sreality redirect to the listing.
