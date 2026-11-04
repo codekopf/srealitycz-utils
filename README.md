@@ -113,6 +113,19 @@ the last cached rates of the other currencies are kept. If no rate was ever fetc
   - price texts are in Czech (`Kč/měsíc`, `Cena na vyžádání`) also on the English site;
   - a card's link goes through one sreality redirect to the listing.
 
+## Images
+
+- `images/icon.svg` is the extension icon, rendered to `images/icon-16.png` … `icon-128.png`.
+  The 128 px icon has the 16 px transparent padding the Chrome Web Store asks for.
+- `images/social-preview.html` is the GitHub social preview, rendered to `images/social-preview.png` (1280×640).
+  To use it, upload it in the repository's **Settings → General → Social preview**.
+
+After changing either source, render the PNGs again with Google Chrome:
+
+```bash
+images/render.sh
+```
+
 ## Test
 
 Serve this folder and open `test.html`. Its title shows `PASS` or `FAIL`. The test fakes `chrome.*` and sreality's server and API:
