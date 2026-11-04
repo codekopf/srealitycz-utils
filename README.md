@@ -1,9 +1,14 @@
 # Sreality utility Google Chrome extension
 
-Chrome extension for [sreality.cz](https://www.sreality.cz/) that shows prices in **EUR**, **USD** or about 160 other currencies
-at the daily exchange rate, instead of CZK, and areas in **ft²** instead of m².
+Chrome extension for [sreality.cz](https://www.sreality.cz/) that:
 
-It works on search results and on listing detail pages
+- shows prices in **EUR**, **USD** or about 160 other currencies at the daily exchange rate, instead of CZK,
+- shows areas in **ft²** instead of m²,
+- adds the price per m² (or ft²) to every listing title in search results,
+- sorts the listings on the page by price per m², which sreality offers only to premium accounts,
+- shows **50, 100, 250 or 500 listings per page** instead of sreality's 20, with a page picker that follows the page size.
+
+Prices and areas are converted on search results and on listing detail pages
 (e.g. https://www.sreality.cz/detail/prodej/dum/rodinny/praha-chodov-medkova/2503409740).
 
 ## Install
@@ -17,7 +22,7 @@ After changing the code, click the reload icon on the extension's card in `chrom
 
 ## Use
 
-Every sreality.cz page gets two bubbles in the bottom-left corner.
+Every sreality.cz page gets bubbles in the bottom-left corner: currency and unit everywhere, plus pages on search results.
 
 **Currency bubble: CZK | EUR | USD | +**
 
@@ -36,6 +41,19 @@ Every sreality.cz page gets two bubbles in the bottom-left corner.
   Prices per m² become prices per ft² (`125 000 Kč/m²` → `€477/ft²`).
 - Click **m²** to show the original areas again.
 
+**Pages bubble: listings per page | page** (search results only)
+
+- Pick **50 / page**, **100 / page**, **250 / page** or **500 / page** to see that many listings at once.
+  The listings reload, starting from page 1.
+- Pick **Sreality default** to get sreality's own pages back (20 listings and 2 tips per page).
+- Pick a page in **Page 3 / 8** to go to it. The number of pages follows the page size:
+  2,000 listings make 100 pages with sreality's default and 8 pages with 250 per page.
+  Page 3 with 250 per page shows listings 501–750.
+- The page number is in the URL (`?strana=3`), so reloading and the back button keep it.
+- Filters and sorting work as usual, and the listings follow them.
+- Like sreality, it stops at 10,000 listings, for example after 40 pages of 250.
+- If the listings can't be loaded, sreality's own listings stay. Hover the bubble to see why.
+
 **Price per m² in search results**
 
 Each listing title in search results ends with its price per m² (or ft²) in the chosen currency,
@@ -44,12 +62,24 @@ for example `Prodej bytu 3+kk 68 m² - €4,524/m²`. Listings without a price s
 **Sort: Od nejlevnější za m²/ft² (local)**
 
 Sreality's own `Od nejlevnější za m²` needs a premium account. The extension adds **Od nejlevnější za m²/ft² (local)**
-to the **Řadit** menu of search results. It sorts the listings already on the page (not the whole search) by price per m²,
-cheapest first, whatever currency and unit are shown. Listings without a price or area go last.
-The order resets when sreality loads other listings (next page, another filter or sort).
+to the **Řadit** menu of search results. It sorts the listings shown on the page (not the whole search) by price per m²,
+cheapest first, whatever currency and unit are shown. With 500 listings per page, it sorts those 500.
+Listings without a price or area go last.
+The order resets when other listings load (next page, another filter or sort).
 
 Hover any converted price or area to see the original text.
-Your choices are remembered and apply to all sreality.cz tabs. The defaults are EUR and m².
+Your choices are remembered and apply to all sreality.cz tabs. The defaults are EUR, m² and sreality's own pages.
+
+## How listings per page work
+
+Sreality's page URLs have no page-size parameter: its code always asks its API for 22 results (20 listings and 2 tips).
+The API itself, `https://www.sreality.cz/api/v1/estates/search`, accepts any `limit` and `offset` up to `offset + limit = 10000`.
+When a page size is chosen, the extension:
+
+1. Asks sreality's server for the current page's data (`/_next/data/<build>/cs/<path>.json?<query>`).
+   This holds the search filters the server parsed from the page URL.
+2. Calls the API with those filters, renamed to the API's names, plus `limit` and `offset = (page − 1) × limit`.
+3. Hides sreality's list and page links and shows the results as copies of a sreality listing card.
 
 ## Exchange rates
 
@@ -69,10 +99,17 @@ the last cached rates of the other currencies are kept. If no rate was ever fetc
 - Abbreviated amounts such as `30 tis. Kč` stay in CZK.
 - Energy figures such as `kWh/m²` are not converted to ft².
 - The local sort only reorders the listings visually; the Tab key and screen readers still follow sreality's order.
+- Listings per page relies on sreality's internal API and page data, which may change with any sreality release.
+- With a page size chosen:
+  - every page change reloads the page, and sreality's own listings show briefly before the new ones;
+  - the cards have one photo and no save (heart) button or badges such as `TIP`;
+  - sreality's tips (promoted listings) are not shown;
+  - price texts are in Czech (`Kč/měsíc`, `Cena na vyžádání`) also on the English site;
+  - a card's link goes through one sreality redirect to the listing.
 
 ## Test
 
-Serve this folder and open `test.html`. Its title shows `PASS` or `FAIL`:
+Serve this folder and open `test.html`. Its title shows `PASS` or `FAIL`. The test fakes `chrome.*` and sreality's server and API:
 
 ```bash
 python3 -m http.server 8000 --directory srealitycz-utils

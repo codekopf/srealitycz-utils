@@ -9,7 +9,8 @@
 <p id="none">Cena na vyžádání</p>
 <p id="area">Prodej rodinného domu 180&nbsp;m², pozemek 1&nbsp;068&nbsp;m²</p>
 <p id="perm2">125 000 Kč/m²</p>
-<ul data-e2e="estates-list" style="display:flex"><li id="flat124"><p>Prodej bytu 4+1 124&nbsp;m²</p><p>Praha 5</p><p>6&nbsp;200&nbsp;000&nbsp;Kč</p></li><li id="flat50"><p>Prodej bytu 2+kk 50&nbsp;m²</p><p>4&nbsp;000&nbsp;000&nbsp;Kč</p></li><li id="noprice"><p>Prodej bytu 3+kk 80&nbsp;m²</p><p>Cena na vyžádání</p></li><li id="land"><p>Prodej pozemku 1&nbsp;000&nbsp;m²</p><p>1&nbsp;500&nbsp;Kč/m²</p></li></ul>
+<script id="__NEXT_DATA__" type="application/json">{"buildId": "b1"}</script>
+<ul data-e2e="estates-list" style="display:flex"><li id="flat124"><p>Prodej bytu 4+1 124&nbsp;m²</p><p>Praha 5</p><p>6&nbsp;200&nbsp;000&nbsp;Kč</p></li><li id="estate-list-item-50"><a href="/detail/prodej/byt/2+kk/praha/50"><div><button>♡</button><div class="MuiChip-root">TIP</div><ul><li><img src="//img.test/50.png?fl=res,800" srcset="//img.test/50.png?fl=res,800"></li><li><img src="//img.test/51.png?fl=res,800"></li></ul></div><div><p>Prodej bytu 2+kk 50&nbsp;m²</p><p>Praha</p><p>4&nbsp;000&nbsp;000&nbsp;Kč</p></div></a></li><li id="noprice"><p>Prodej bytu 3+kk 80&nbsp;m²</p><p>Cena na vyžádání</p></li><li id="land"><p>Prodej pozemku 1&nbsp;000&nbsp;m²</p><p>1&nbsp;500&nbsp;Kč/m²</p></li></ul>
 <script>
   const listeners = [];
   const store = {};
@@ -32,6 +33,31 @@
         KZT: {rate: 1, amount: 20, validFor: '2026-11-03', source: 'Rates By Exchange Rate API'},
       }),
     },
+  };
+
+  // a search page with 2000 listings (2100 with promoted ones); the API answers with three listings whatever the limit
+  document.head.append(Object.assign(document.createElement('base'), {href: location.href})); // content.js still loads from here
+  history.replaceState(null, '', '/hledani/prodej/byty?strana=2');
+  const fetched = [];
+  let apiStatus = 200;
+  const filters = {page: 2, limit: 22, categoryTypeCb: [1], categoryMainCb: [1], categorySubCb: [4, 6], priceSqMeterTo: 150000,
+    localitySearchName: ['Praha', 'Brno'], pois: ['metro', 'bus'], poisDistanceList: {metro: 500, bus: 300}, multilocalityTypeOr: true,
+    sort: '-date', timestamp: '2026-11-04T08:09:23.427Z', includeBrokerTip: true, estateAreaFrom: null, lang: 'cs'};
+  const result = (id, name, czk, unit, locality) => ({hash_id: id, advert_name: name, advert_images: id === 2 ? [] : [`//img.test/${id}.png`],
+    price_summary_czk: czk, price_summary_unit_cb: {value: unit}, locality});
+  const results = [
+    result(1, 'Prodej bytu 3+kk 100 m²', 10000000, 1, {street: 'Dělnická', city: 'Praha', citypart: 'Holešovice', country: 'Česká republika', country_id: 112}),
+    result(2, 'Pronájem bytu 1+kk 25 m²', 20000, 2, {city: 'Wien', citypart: 'Wien', country: 'Rakousko', country_id: 40}),
+    result(3, 'Prodej pozemku 1 000 m²', 0, 1, {city: 'Brno', citypart: 'Brno'}),
+  ];
+  window.fetch = async url => {
+    fetched.push(url);
+    if (url.startsWith('/_next/data/b1/cs/hledani/prodej/byty.json?')) return Response.json({pageProps: {dehydratedState: {queries: [
+      {queryKey: ['userSelf'], state: {data: {}}},
+      {queryKey: ['estatesSearch', filters], state: {data: {pagination: {limit: 22, offset: 22, total: 2000, totalWithPromo: 2100}}}},
+    ]}}});
+    if (url.startsWith('/api/v1/estates/search?')) return Response.json({results}, {status: apiStatus});
+    return new Response('', {status: 404});
   };
 </script>
 <script src="content.js"></script>
@@ -117,11 +143,64 @@
     option?.click();
     const list = document.querySelector('[data-e2e="estates-list"]');
     const order = () => [...list.children].sort((a, b) => a.style.order - b.style.order).map(li => li.id).join();
-    eq(order(), 'land,flat124,flat50,noprice', 'sorted by price per m² from the original CZK texts, no price last');
+    eq(order(), 'land,flat124,estate-list-item-50,noprice', 'sorted by price per m² from the original CZK texts, no price last');
     eq(menu.isConnected, false, 'menu closed after sorting');
     list.append(document.createElement('li'));
     await tick();
     eq([...list.children].map(li => li.style.order).join(''), '', 'local order dropped when the site changes the list');
+
+    const [limitPill] = [...ui.querySelectorAll('.pill')].slice(-1);
+    const [limitSelect, pageSelect] = limitPill.children;
+    const pages = () => `${pageSelect.value}/${pageSelect.options.length}`;
+    const apiCall = () => new URL(fetched.findLast(u => u.startsWith('/api/')), location.href).searchParams;
+    const ours = () => document.querySelector('[data-sru]');
+    eq(limitPill.hidden, false, 'pages switcher shown on a search page');
+    eq(fetched[0], '/_next/data/b1/cs/hledani/prodej/byty.json?strana=2', 'search asked from the server for this URL');
+    eq(`${limitSelect.value} ${pages()}`, '0 2/96', 'sreality default: page 2 of its 96 (2100 listings with promoted ones, 22 a page)');
+    eq(pageSelect.options[0].text, 'Page 1 / 96', 'page option text');
+    eq(ours(), null, 'sreality default keeps its own list');
+
+    await chrome.storage.sync.set({limit: 250});
+    await tick();
+    eq([...apiCall()].map(p => p.join('=')).join('&'), 'limit=250&offset=250&category_type_cb=1&category_main_cb=1&category_sub_cb=4,6'
+      + '&price_m2_to=150000&locality_search_name=Praha|Brno&pois=metro,bus&multilocality_type_or=true&sort=-date&lang=cs&pois_distance_list=500,300',
+      'API asked for page 2 of 250 with the filters in its names');
+    eq(`${limitSelect.value} ${pages()}`, '250 2/8', '2000 listings make 8 pages of 250');
+    eq(getComputedStyle(list).display, 'none', 'sreality list hidden');
+    eq([...ours().children].map(li => li.id).join(), 'sru-1,sru-2,sru-3', 'API listings shown');
+    const card = id => document.getElementById(id);
+    const texts = id => [...card(id).querySelectorAll('p')].map(p => p.textContent).join(' | ');
+    eq(texts('sru-1'), `Prodej bytu 3+kk 100 m² - ${fmt(4000, 'EUR')}/m² | Dělnická, Praha - Holešovice | ${fmt(400000, 'EUR')}`, 'card texts, converted');
+    eq(texts('sru-2'), `Pronájem bytu 1+kk 25 m² - ${fmt(32, 'EUR')}/m² | Wien, Rakousko | ${fmt(800, 'EUR')}/měsíc`, 'rent card abroad');
+    eq(texts('sru-3'), 'Prodej pozemku 1 000 m² | Brno | Cena na vyžádání', 'card without price');
+    eq(card('sru-1').querySelector('a').getAttribute('href'), '/detail/prodej/byt/2+kk/praha/1', 'card links to its listing');
+    eq([...card('sru-1').querySelectorAll('img')].map(i => i.getAttribute('src') + (i.srcset ? ' srcset' : '')).join(), '//img.test/1.png?fl=res,800', 'first photo only, template size');
+    eq(card('sru-1').querySelectorAll('button, .MuiChip-root').length, 0, 'no dead buttons or template badges');
+    eq(card('sru-2').querySelectorAll('img').length, 0, 'no photo, no image');
+    sortListings();
+    eq([...ours().children].sort((a, b) => a.style.order - b.style.order).map(li => li.id).join(), 'sru-2,sru-1,sru-3', 'local sort sorts the shown list');
+
+    history.replaceState(null, '', '/hledani/prodej/byty?strana=9'); // sreality changing the URL without reloading
+    document.body.append(document.createElement('div'));
+    await tick();
+    eq(`${apiCall().get('offset')} ${pages()}`, '1750 8/8', 'URL change reloads; page 9 of 8 shows the last page');
+    eq(pageUrl(3).replace(location.origin, ''), '/hledani/prodej/byty?strana=3', 'page 3 link');
+    eq(pageUrl(1).replace(location.origin, ''), '/hledani/prodej/byty', 'page 1 link');
+
+    apiStatus = 422;
+    await chrome.storage.sync.set({limit: 500});
+    await tick();
+    eq(`${ours()} ${getComputedStyle(list).display}`, 'null flex', 'API error shows sreality list again');
+    eq(limitPill.title, 'Could not load the listings: /api/v1/estates/search returned 422', 'error in tooltip');
+
+    await chrome.storage.sync.set({limit: 0});
+    await tick();
+    eq(`${pages()} ${document.documentElement.hasAttribute('data-sru-limit')}`, '9/96 false', 'back to sreality default');
+
+    history.replaceState(null, '', '/test.html');
+    document.body.append(document.createElement('div'));
+    await tick();
+    eq(limitPill.hidden, true, 'pages switcher hidden outside search');
 
     document.title = failures.length ? 'FAIL' : 'PASS';
     document.body.insertAdjacentHTML('beforeend', `<pre>${document.title}\n${failures.join('\n')}</pre>`);
