@@ -43,7 +43,8 @@
   const filters = {page: 2, limit: 22, categoryTypeCb: [1], categoryMainCb: [1], categorySubCb: [4, 6], priceSqMeterTo: 150000,
     localitySearchName: ['Praha', 'Brno'], pois: ['metro', 'bus'], poisDistanceList: {metro: 500, bus: 300}, multilocalityTypeOr: true,
     sort: '-date', timestamp: '2026-11-04T08:09:23.427Z', includeBrokerTip: true, estateAreaFrom: null, lang: 'cs'};
-  const result = (id, name, czk, unit, locality) => ({hash_id: id, advert_name: name, advert_images: id === 2 ? [] : [`//img.test/${id}.png`],
+  const photos = {1: ['//img.test/1.png', '//img.test/1b.png', '//img.test/1c.png'], 2: [], 3: ['//img.test/3.png']};
+  const result = (id, name, czk, unit, locality) => ({hash_id: id, advert_name: name, advert_images: photos[id],
     price_summary_czk: czk, price_summary_unit_cb: {value: unit}, locality});
   const results = [
     result(1, 'Prodej bytu 3+kk 100 m²', 10000000, 1, {street: 'Dělnická', city: 'Praha', citypart: 'Holešovice', country: 'Česká republika', country_id: 112}),
@@ -181,9 +182,19 @@
     eq(texts('sru-2'), `Pronájem bytu 1+kk 25 m² - ${fmt(32, 'EUR')}/m² | Wien, Rakousko | ${fmt(800, 'EUR')}/měsíc`, 'rent card abroad');
     eq(texts('sru-3'), 'Prodej pozemku 1 000 m² | Brno | Cena na vyžádání', 'card without price');
     eq(card('sru-1').querySelector('a').getAttribute('href'), '/detail/prodej/byt/2+kk/praha/1', 'card links to its listing');
-    eq([...card('sru-1').querySelectorAll('img')].map(i => i.getAttribute('src') + (i.srcset ? ' srcset' : '')).join(), '//img.test/1.png?fl=res,800', 'first photo only, template size');
-    eq(card('sru-1').querySelectorAll('button, .MuiChip-root').length, 0, 'no dead buttons or template badges');
-    eq(card('sru-2').querySelectorAll('img').length, 0, 'no photo, no image');
+    const photo = id => [...card(id).querySelectorAll('img')].map(i => i.getAttribute('src') + (i.srcset ? ' srcset' : '')).join();
+    eq(photo('sru-1'), '//img.test/1.png?fl=res,800', 'one slide with the first photo, template size');
+    eq(card('sru-1').querySelectorAll('button:not(.sru-photo), .MuiChip-root').length, 0, 'no dead buttons or template badges');
+    const [prev, next] = card('sru-1').querySelectorAll('.sru-photo');
+    eq(`${prev?.ariaLabel} ${next?.ariaLabel} ${prev?.parentElement.tagName}`, 'Previous photo Next photo DIV', 'photo arrows next to the slides');
+    const press = b => { const e = new MouseEvent('click', {bubbles: true, cancelable: true}); b.dispatchEvent(e); return e.defaultPrevented; };
+    eq(press(next), true, 'arrow does not open the listing');
+    eq(photo('sru-1'), '//img.test/1b.png?fl=res,800', 'next photo');
+    press(prev);
+    press(prev);
+    eq(photo('sru-1'), '//img.test/1c.png?fl=res,800', 'previous photo wraps around to the last');
+    eq(card('sru-2').querySelectorAll('img, .sru-photo').length, 0, 'no photo, no image or arrows');
+    eq(`${photo('sru-3')} ${card('sru-3').querySelectorAll('.sru-photo').length}`, '//img.test/3.png?fl=res,800 0', 'one photo, no arrows');
     await chrome.storage.sync.set({sort: 'asc'});
     eq(order(ours()), 'sru-2,sru-1,sru-3', 'local sort sorts the shown list');
 
