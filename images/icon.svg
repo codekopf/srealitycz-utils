@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Extension icon: a house with a price coin. Rendered to icon-16/32/48/128.png, see README. -->
+  <style>@media (max-width: 24px) { .detail { display: none; } }</style><!-- the € is a blur at 16 px -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34405a"/>
+      <stop offset="1" stop-color="#1c2331"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <path d="M56 22 L100 58 H88 V104 H24 V58 H12 Z" fill="#fff" stroke="#fff" stroke-width="6" stroke-linejoin="round"/>
+  <rect x="46" y="76" width="20" height="31" rx="3" fill="#26304a"/>
+  <circle cx="94" cy="92" r="25" fill="#cc0000" stroke="#1f2636" stroke-width="7"/>
+  <text class="detail" x="94" y="93" fill="#fff" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="32" font-weight="800" text-anchor="middle" dominant-baseline="central">€</text>
+</svg>

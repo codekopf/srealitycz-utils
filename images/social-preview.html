@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- GitHub social preview, 1280×640. Rendered to social-preview.png, see README. -->
+<meta charset="utf-8">
+<title>Sreality Utility social preview</title>
+<style>
+  html, body { margin: 0; }
+  body { width: 1280px; height: 640px; box-sizing: border-box; padding: 82px 80px; display: flex; gap: 64px; overflow: hidden;
+         background: radial-gradient(circle at 15% 10%, #3b4866, #1c2331 70%); color: #fff;
+         font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .icon { width: 208px; height: 208px; flex: none; filter: drop-shadow(0 12px 28px rgba(0, 0, 0, .45)); }
+  h1 { margin: 0; font-size: 74px; line-height: 1; letter-spacing: -1.5px; }
+  .sub { margin: 14px 0 34px; font-size: 32px; color: #aeb7c9; }
+  ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 132px 1fr; gap: 10px 20px; font-size: 26px; line-height: 34px; }
+  li { display: contents; }
+  b { color: #ff6b6b; font-weight: 700; }
+  span { color: #e6e9f0; }
+  .bar { display: flex; gap: 12px; margin-top: 40px; font: 600 20px/1 system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .pill { display: flex; gap: 3px; padding: 5px; background: #fff; border-radius: 27px; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+  .pill i { font-style: normal; padding: 11px 16px; border-radius: 999px; color: #232b3a; }
+  .pill .on { background: #cc0000; color: #fff; }
+</style>
+<img class="icon" src="icon.svg" alt="">
+<div>
+  <h1>Sreality Utility</h1>
+  <div class="sub">Chrome extension for sreality.cz</div>
+  <ul>
+    <li><b>€ $ ₸</b><span>Prices in EUR, USD or 160 other currencies</span></li>
+    <li><b>m² ⇄ ft²</b><span>Areas in square metres or square feet</span></li>
+    <li><b>€/m²</b><span>Price per m² after every listing title</span></li>
+    <li><b>50–500</b><span>Listings per page, with a page picker</span></li>
+    <li><b>⇅</b><span>Sort by price per m², either way</span></li>
+  </ul>
+  <div class="bar">
+    <div class="pill"><i>CZK</i><i class="on">EUR</i><i>USD</i><i>+</i></div>
+    <div class="pill"><i class="on">m²</i><i>ft²</i></div>
+    <div class="pill"><i>100 / page</i><i>Page 2 / 61</i><i class="on">⇅ asc m²</i></div>
+  </div>
+</div>
