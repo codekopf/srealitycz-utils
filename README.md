@@ -82,10 +82,11 @@ Listings without an area go last. Only one of the two sorts is on at a time: tur
 
 **Advertisements bubble: adv ✕** (search results only)
 
-Sreality puts tips among its listings, for example a broker's `TIP: … Koupím byt v Praze`. They are hidden by default.
+Sreality puts tips (for example a broker's `TIP: … Koupím byt v Praze`) and native ads marked `Reklama` among its listings.
+They are hidden by default.
 Click **adv ✕** to show them (**adv ✓**), and again to hide them.
 
-Hover any converted price or area to see the original text.
+Hover any converted price or area to see the original text. Hover any button or picker in the bubbles to see what it does.
 Your choices are remembered and apply to all sreality.cz tabs. The defaults are EUR, m², sreality's own pages and order, and no advertisements.
 
 ## How listings per page work
