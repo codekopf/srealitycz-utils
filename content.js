@@ -247,18 +247,18 @@ async function refresh() {
     pageSelect.replaceChildren(...Array.from({length: pages}, (_, i) => new Option(`Page ${i + 1} / ${pages}`, i + 1)));
     pageSelect.value = page;
     if (found) showListings(found.results);
-    limitPill.title = '';
+    limitTitle('');
   } catch (e) {
     if (run !== refreshes) return;
     html.removeAttribute('data-sru-limit');
     ours?.remove();
-    limitPill.title = `Could not load the listings: ${e.message}`;
+    limitTitle(`Could not load the listings: ${e.message}`);
   }
 }
 
 document.head.append(Object.assign(document.createElement('style'), {
   textContent: `html[data-sru-limit] :is(${LIST}:not([data-sru]), [data-e2e="pagination"]) { display: none !important; }
-    html:not([data-sru-ads]) ${LIST} > li[id*="tip-item"] { display: none !important; } /* sreality's tips, e.g. broker-tip-item-1-172703 */
+    html:not([data-sru-ads]) ${LIST} > li:is([id*="tip-item"], [data-e2e="nativni"]) { display: none !important; } /* sreality's tips (broker-tip-item-1-172703) and native ads (estate-list-native-8) */
     .sru-photo { position: absolute; top: 50%; z-index: 2; translate: 0 -50%; display: flex; align-items: center; justify-content: center;
                  width: 32px; height: 32px; padding: 0 0 3px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .9); color: #232b3a;
                  font: 600 24px/1 system-ui, sans-serif; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); opacity: 0; transition: opacity .2s; }
@@ -292,14 +292,24 @@ const [favs, picker] = currencyPill.children;
 const [limitSelect, pageSelect, sortButton, sizeButton] = limitPill.children;
 const adsButton = adsPill.firstElementChild;
 
-function button(key, value) {
+function button(key, value, title) {
   const b = document.createElement('button');
   b.textContent = value;
+  b.title = title;
   Object.assign(b.dataset, {key, value});
   return b;
 }
 
-unitPill.append(button('unit', 'm²'), button('unit', 'ft²'));
+unitPill.append(button('unit', 'm²', 'Show areas in m², as sreality does'), button('unit', 'ft²', 'Show areas in ft² and prices per ft²'));
+picker.title = 'Add or remove a favorite currency';
+
+// Hovering a select shows its own title, not the bubble's, so the error goes on all three.
+function limitTitle(error) {
+  limitPill.title = error;
+  limitSelect.title = error || 'Listings per page';
+  pageSelect.title = error || 'Go to another page of the listings';
+}
+limitTitle('');
 shadow.querySelector('.bar').addEventListener('click', e => {
   const {key, value} = e.target.dataset;
   if (key) chrome.storage.sync.set({[key]: value});
@@ -325,7 +335,12 @@ function renderFavorites() {
   const list = ['CZK', ...settings.favorites]; // CZK always first
   if (favs.dataset.list === String(list)) return; // rebuilding would drop keyboard focus
   favs.dataset.list = list;
-  favs.replaceChildren(...list.map(c => Object.assign(button('currency', c), {disabled: !rates[c]})));
+  favs.replaceChildren(...list.map(c => {
+    const r = rates[c];
+    const title = c === 'CZK' ? 'Show the original prices in Kč'
+      : r ? `Show prices in ${currencyNames.of(c)} (${r.source}, ${r.validFor}: ${r.amount} ${c} = ${r.rate} Kč)` : `${c}: no rate available`;
+    return Object.assign(button('currency', c, title), {disabled: !r});
+  }));
   const group = (label, codes) => {
     const g = document.createElement('optgroup');
     g.label = label;
