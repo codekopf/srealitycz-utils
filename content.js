@@ -8,7 +8,7 @@ const PRICE = new RegExp(NUM + 'Kč(/m²)?', 'g');
 const AREA = new RegExp(NUM + 'm²', 'g');
 const SQFT_PER_M2 = 10.7639;
 const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']);
-const DEFAULTS = {currency: 'EUR', favorites: ['EUR', 'USD'], unit: 'm²', limit: 0, sort: ''};
+const DEFAULTS = {currency: 'EUR', favorites: ['EUR', 'USD'], unit: 'm²', limit: 0, sort: '', sizeSort: '', ads: false};
 const state = new WeakMap(); // text node -> {orig, shown}
 const areaFormat = new Intl.NumberFormat(undefined, {maximumFractionDigits: 0});
 const currencyNames = new Intl.DisplayNames(undefined, {type: 'currency'});
@@ -59,38 +59,52 @@ function walk(root) {
 }
 
 // Sorting by price per m² on sreality needs a premium account, so this sorts the listings already on the page.
+// settings.sort sorts by price per m², settings.sizeSort by area; setting one clears the other.
 const NEXT_SORT = {'': 'asc', asc: 'desc', desc: ''}; // '': sreality's order
 
-// From the original texts ("Prodej bytu 4+1 124 m²", "18 060 650 Kč" or "1 500 Kč/m²"); listings without a price or area go last.
-function pricePerM2(card) {
+// The card's original texts ("Prodej bytu 4+1 124 m²", "18 060 650 Kč" or "1 500 Kč/m²").
+function cardText(card) {
   const it = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
   let text = '';
   for (let n; (n = it.nextNode());) {
     const s = state.get(n);
     text += (s && n.data === s.shown ? s.orig : n.data) + '\n'; // \n keeps "Praha 5" and "18 060 650 Kč" apart
   }
+  return text;
+}
+
+// Listings without a price or area go last.
+function pricePerM2(card) {
+  const text = cardText(card);
   const [price] = text.matchAll(PRICE), [area] = text.matchAll(AREA);
   if (price?.[3]) return num(price[1], price[2]); // already per m²
   return price && area ? num(price[1], price[2]) / num(area[1], area[2]) : Infinity;
 }
 
+// The first area on the card, in m²: the one in its title.
+function size(card) {
+  const [area] = cardText(card).matchAll(AREA);
+  return area ? num(area[1], area[2]) : Infinity;
+}
+
 // CSS order keeps the DOM as React left it, so React can still re-render the list correctly.
 function sortListings() {
-  const dir = {asc: 1, desc: -1}[settings.sort];
+  const dir = {asc: 1, desc: -1}[settings.sizeSort || settings.sort];
+  const value = settings.sizeSort ? size : pricePerM2;
   for (const list of document.querySelectorAll(LIST)) {
     if (!dir) {
       for (const li of list.children) li.style.order = '';
       continue;
     }
-    [...list.children].map(li => [pricePerM2(li), li])
-      .sort(([a], [b]) => (a === Infinity) - (b === Infinity) || dir * (a - b) || 0) // no price or area: last either way
+    [...list.children].map(li => [value(li), li])
+      .sort(([a], [b]) => (a === Infinity) - (b === Infinity) || dir * (a - b) || 0) // no value: last either way
       .forEach(([, li], i) => li.style.order = i);
   }
 }
 
 // Listings per page: sreality shows 20 (+2 tips) and its URLs take no page size, but its API takes any limit.
 // Its server turns the page URL into API filters, so this asks the server for them (_next/data) and then calls the API itself.
-const LIMITS = [0, 50, 100, 250, 500]; // 0: sreality's own pages
+const LIMITS = [0, 50, 100, 250, 500, 750, 1000]; // 0: sreality's own pages
 const MAX_RESULTS = 1e4; // the API refuses offset + limit above this, and sreality's pages stop there too
 const SEARCH_PATH = /^(\/[a-z]{2})?\/(hledani|search)(\/|$)/;
 const LIST = '[data-e2e="estates-list"]';
@@ -218,7 +232,7 @@ async function refresh() {
   shownHref = location.href;
   const run = ++refreshes, {limit} = settings, html = document.documentElement;
   const search = SEARCH_PATH.test(location.pathname);
-  limitPill.hidden = !search;
+  limitPill.hidden = adsPill.hidden = !search;
   html.toggleAttribute('data-sru-limit', search && limit > 0); // hides sreality's list and pager right away
   if (!search || !limit) ours?.remove();
   if (!search) return;
@@ -244,6 +258,7 @@ async function refresh() {
 
 document.head.append(Object.assign(document.createElement('style'), {
   textContent: `html[data-sru-limit] :is(${LIST}:not([data-sru]), [data-e2e="pagination"]) { display: none !important; }
+    html:not([data-sru-ads]) ${LIST} > li[id*="tip-item"] { display: none !important; } /* sreality's tips, e.g. broker-tip-item-1-172703 */
     .sru-photo { position: absolute; top: 50%; z-index: 2; translate: 0 -50%; display: flex; align-items: center; justify-content: center;
                  width: 32px; height: 32px; padding: 0 0 3px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .9); color: #232b3a;
                  font: 600 24px/1 system-ui, sans-serif; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); opacity: 0; transition: opacity .2s; }
@@ -269,11 +284,13 @@ shadow.innerHTML = `<style>
 </style><div class="bar">
   <div class="pill" role="group" aria-label="Price currency"><span></span><select aria-label="Add or remove a favorite currency"></select></div>
   <div class="pill" role="group" aria-label="Area unit"></div>
-  <div class="pill" role="group" aria-label="Listings" hidden><select aria-label="Listings per page"></select><select aria-label="Page"></select><button></button></div>
+  <div class="pill" role="group" aria-label="Listings" hidden><select aria-label="Listings per page"></select><select aria-label="Page"></select><button></button><button></button></div>
+  <div class="pill" role="group" aria-label="Advertisements" hidden><button></button></div>
 </div>`;
-const [currencyPill, unitPill, limitPill] = shadow.querySelectorAll('.pill');
+const [currencyPill, unitPill, limitPill, adsPill] = shadow.querySelectorAll('.pill');
 const [favs, picker] = currencyPill.children;
-const [limitSelect, pageSelect, sortButton] = limitPill.children;
+const [limitSelect, pageSelect, sortButton, sizeButton] = limitPill.children;
+const adsButton = adsPill.firstElementChild;
 
 function button(key, value) {
   const b = document.createElement('button');
@@ -300,7 +317,9 @@ limitSelect.addEventListener('change', async () => {
   if (currentPage() > 1) location.assign(pageUrl(1)); // a new page size starts on page 1
 });
 pageSelect.addEventListener('change', () => location.assign(pageUrl(Number(pageSelect.value))));
-sortButton.addEventListener('click', () => chrome.storage.sync.set({sort: NEXT_SORT[settings.sort]}));
+sortButton.addEventListener('click', () => chrome.storage.sync.set({sort: NEXT_SORT[settings.sort], sizeSort: ''}));
+sizeButton.addEventListener('click', () => chrome.storage.sync.set({sizeSort: NEXT_SORT[settings.sizeSort], sort: ''}));
+adsButton.addEventListener('click', () => chrome.storage.sync.set({ads: !settings.ads}));
 
 function renderFavorites() {
   const list = ['CZK', ...settings.favorites]; // CZK always first
@@ -326,8 +345,16 @@ function render() {
   for (const b of shadow.querySelectorAll('button[data-key]')) {
     b.setAttribute('aria-pressed', b.dataset.value === (b.dataset.key === 'unit' ? settings.unit : currency));
   }
-  const {sort, unit} = settings;
-  sortButton.textContent = `⇅ ${sort ? `${sort} ` : ''}${unit}`;
+  const {sort, sizeSort, unit, ads} = settings;
+  sizeButton.textContent = `⇅ ${sizeSort ? `${sizeSort} ` : ''}size`;
+  sizeButton.setAttribute('aria-pressed', !!sizeSort);
+  sizeButton.title = sizeButton.ariaLabel = 'Sort the listings on this page by size: '
+    + {'': "sreality's order", asc: 'smallest first', desc: 'largest first'}[sizeSort];
+  document.documentElement.toggleAttribute('data-sru-ads', ads);
+  adsButton.textContent = `adv ${ads ? '✓' : '✕'}`;
+  adsButton.setAttribute('aria-pressed', ads);
+  adsButton.title = adsButton.ariaLabel = `Advertisements (sreality's tips) among the listings: ${ads ? 'shown' : 'hidden'}`;
+  sortButton.textContent = `⇅ ${sort}/${unit}`;
   sortButton.setAttribute('aria-pressed', !!sort);
   sortButton.title = sortButton.ariaLabel = `Sort the listings on this page by price per ${unit}: `
     + {'': "sreality's order", asc: 'cheapest first', desc: 'most expensive first'}[sort];
@@ -367,6 +394,6 @@ Promise.all([
     for (const k in changes) settings[k] = changes[k].newValue ?? DEFAULTS[k];
     render();
     if (changes.limit) refresh();
-    if (changes.sort) sortListings();
+    if (changes.sort || changes.sizeSort) sortListings();
   });
 });

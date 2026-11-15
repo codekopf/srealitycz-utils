@@ -5,8 +5,9 @@ Chrome extension for [sreality.cz](https://www.sreality.cz/) that:
 - shows prices in **EUR**, **USD** or about 160 other currencies at the daily exchange rate, instead of CZK,
 - shows areas in **ft²** instead of m²,
 - adds the price per m² (or ft²) to every listing title in search results,
-- sorts the listings on the page by price per m², which sreality offers only to premium accounts,
-- shows **50, 100, 250 or 500 listings per page** instead of sreality's 20, with a page picker that follows the page size.
+- sorts the listings on the page by price per m², which sreality offers only to premium accounts, or by size,
+- shows **50, 100, 250, 500, 750 or 1000 listings per page** instead of sreality's 20, with a page picker that follows the page size,
+- hides sreality's advertisements (tips) among the listings.
 
 Prices and areas are converted on search results and on listing detail pages
 (e.g. https://www.sreality.cz/detail/prodej/dum/rodinny/praha-chodov-medkova/2503409740).
@@ -22,7 +23,7 @@ After changing the code, click the reload icon on the extension's card in `chrom
 
 ## Use
 
-Every sreality.cz page gets bubbles in the bottom-left corner: currency and unit everywhere, plus listings on search results.
+Every sreality.cz page gets bubbles in the bottom-left corner: currency and unit everywhere, plus listings and advertisements on search results.
 
 **Currency bubble: CZK | EUR | USD | +**
 
@@ -41,9 +42,9 @@ Every sreality.cz page gets bubbles in the bottom-left corner: currency and unit
   Prices per m² become prices per ft² (`125 000 Kč/m²` → `€477/ft²`).
 - Click **m²** to show the original areas again.
 
-**Listings bubble: listings per page | page | ⇅ sort** (search results only)
+**Listings bubble: listings per page | page | ⇅ /m² | ⇅ size** (search results only)
 
-- Pick **50 / page**, **100 / page**, **250 / page** or **500 / page** to see that many listings at once.
+- Pick **50 / page**, **100 / page**, **250 / page**, **500 / page**, **750 / page** or **1000 / page** to see that many listings at once.
   The listings reload, starting from page 1.
 - Pick **Sreality default** to get sreality's own pages back (20 listings and 2 tips per page).
 - Pick a page in **Page 3 / 8** to go to it. The number of pages follows the page size:
@@ -59,22 +60,33 @@ Every sreality.cz page gets bubbles in the bottom-left corner: currency and unit
 Each listing title in search results ends with its price per m² (or ft²) in the chosen currency,
 for example `Prodej bytu 3+kk 68 m² - €4,524/m²`. Listings without a price show no price per m².
 
-**Sort by price per m²: ⇅ m²**
+**Sort by price per m²: ⇅ /m²**
 
-Sreality's own sorting by price per m² needs a premium account. The **⇅** button at the end of the listings bubble
+Sreality's own sorting by price per m² needs a premium account. The **⇅ /m²** button in the listings bubble
 sorts the listings shown on the page (not the whole search) by price per m², whatever currency and unit are shown:
 
-- **⇅ m²**: sreality's order.
-- Click once for **⇅ asc m²**: cheapest per m² first.
-- Click again for **⇅ desc m²**: most expensive per m² first.
+- **⇅ /m²**: sreality's order.
+- Click once for **⇅ asc/m²**: cheapest per m² first.
+- Click again for **⇅ desc/m²**: most expensive per m² first.
 - Click again for sreality's order.
 
 The button shows ft² instead of m² when areas are in ft². Listings without a price or area go last.
 The sort stays on when other listings load (next page, another filter or sreality's own sort).
 With 500 listings per page, it sorts those 500.
 
+**Sort by size: ⇅ size**
+
+The **⇅ size** button at the end of the listings bubble sorts the listings shown on the page by the area in their title:
+**⇅ asc size** is smallest first, **⇅ desc size** is largest first, and a third click gives sreality's order back.
+Listings without an area go last. Only one of the two sorts is on at a time: turning one on turns the other off.
+
+**Advertisements bubble: adv ✕** (search results only)
+
+Sreality puts tips among its listings, for example a broker's `TIP: … Koupím byt v Praze`. They are hidden by default.
+Click **adv ✕** to show them (**adv ✓**), and again to hide them.
+
 Hover any converted price or area to see the original text.
-Your choices are remembered and apply to all sreality.cz tabs. The defaults are EUR, m², and sreality's own pages and order.
+Your choices are remembered and apply to all sreality.cz tabs. The defaults are EUR, m², sreality's own pages and order, and no advertisements.
 
 ## How listings per page work
 
