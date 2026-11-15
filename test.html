@@ -10,7 +10,7 @@
 <p id="area">Prodej rodinného domu 180&nbsp;m², pozemek 1&nbsp;068&nbsp;m²</p>
 <p id="perm2">125 000 Kč/m²</p>
 <script id="__NEXT_DATA__" type="application/json">{"buildId": "b1"}</script>
-<ul data-e2e="estates-list" style="display:flex"><li id="flat124"><p>Prodej bytu 4+1 124&nbsp;m²</p><p>Praha 5</p><p>6&nbsp;200&nbsp;000&nbsp;Kč</p></li><li id="estate-list-item-50"><a href="/detail/prodej/byt/2+kk/praha/50"><div><button>♡</button><div class="MuiChip-root">TIP</div><ul><li><img src="//img.test/50.png?fl=res,800" srcset="//img.test/50.png?fl=res,800"></li><li><img src="//img.test/51.png?fl=res,800"></li></ul></div><div><p>Prodej bytu 2+kk 50&nbsp;m²</p><p>Praha</p><p>4&nbsp;000&nbsp;000&nbsp;Kč</p></div></a></li><li id="noprice"><p>Prodej bytu 3+kk 80&nbsp;m²</p><p>Cena na vyžádání</p></li><li id="land"><p>Prodej pozemku 1&nbsp;000&nbsp;m²</p><p>1&nbsp;500&nbsp;Kč/m²</p></li></ul>
+<ul data-e2e="estates-list" style="display:flex"><li id="flat124"><p>Prodej bytu 4+1 124&nbsp;m²</p><p>Praha 5</p><p>6&nbsp;200&nbsp;000&nbsp;Kč</p></li><li id="estate-list-item-50"><a href="/detail/prodej/byt/2+kk/praha/50"><div><button>♡</button><div class="MuiChip-root">TIP</div><ul><li><img src="//img.test/50.png?fl=res,800" srcset="//img.test/50.png?fl=res,800"></li><li><img src="//img.test/51.png?fl=res,800"></li></ul></div><div><p>Prodej bytu 2+kk 50&nbsp;m²</p><p>Praha</p><p>4&nbsp;000&nbsp;000&nbsp;Kč</p></div></a></li><li id="noprice"><p>Prodej bytu 3+kk 80&nbsp;m²</p><p>Cena na vyžádání</p></li><li id="land"><p>Prodej pozemku 1&nbsp;000&nbsp;m²</p><p>1&nbsp;500&nbsp;Kč/m²</p></li><li id="broker-tip-item-1-172703"><p>TIP: Koupím byt</p></li></ul>
 <script>
   const listeners = [];
   const store = {};
@@ -133,32 +133,63 @@
     await tick();
     eq(text('main'), fmt(40, 'EUR'), 'text re-rendered by the site');
 
-    const [limitPill] = [...ui.querySelectorAll('.pill')].slice(-1);
-    const [limitSelect, pageSelect, sortButton] = limitPill.children;
+    const [limitPill, adsPill] = [...ui.querySelectorAll('.pill')].slice(-2);
+    const [limitSelect, pageSelect, sortButton, sizeButton] = limitPill.children;
+    const adsButton = adsPill.firstElementChild;
     const list = document.querySelector('[data-e2e="estates-list"]');
+    const tip = document.getElementById('broker-tip-item-1-172703');
+    const adsShown = () => `${adsButton.textContent} ${adsButton.getAttribute('aria-pressed')} ${getComputedStyle(tip).display}`;
+    eq(`${adsShown()} ${adsPill.hidden}`, 'adv ✕ false none false', 'tips hidden by default');
+    adsButton.click();
+    await tick();
+    eq(adsShown(), 'adv ✓ true list-item', 'adv button shows the tips');
+    adsButton.click();
+    await tick();
+    eq(adsShown(), 'adv ✕ false none', 'adv button hides the tips again');
+    tip.remove();
+    await tick();
+    eq(limitSelect.options.length, 7, 'page sizes up to 1000');
     const order = l => [...l.children].sort((a, b) => a.style.order - b.style.order).map(li => li.id).join();
     const sortShown = () => `${sortButton.textContent} ${sortButton.getAttribute('aria-pressed')}`;
-    eq(sortShown(), '⇅ m² false', 'sort button off');
+    eq(sortShown(), '⇅ /m² false', 'sort button off');
     eq([...list.children].map(li => li.style.order).join(''), '', "sreality's order");
     sortButton.click();
     await tick();
-    eq(sortShown(), '⇅ asc m² true', 'sort button ascending');
+    eq(sortShown(), '⇅ asc/m² true', 'sort button ascending');
     eq(sortButton.ariaLabel, 'Sort the listings on this page by price per m²: cheapest first', 'sort button label');
     eq(order(list), 'land,flat124,estate-list-item-50,noprice', 'sorted by price per m² from the original CZK texts, no price last');
     sortButton.click();
     await tick();
-    eq(sortShown(), '⇅ desc m² true', 'sort button descending');
+    eq(sortShown(), '⇅ desc/m² true', 'sort button descending');
     eq(order(list), 'estate-list-item-50,flat124,land,noprice', 'most expensive per m² first, no price still last');
     list.append(Object.assign(document.createElement('li'), {id: 'added'}));
     list.prepend(document.getElementById('land')); // the site re-sorting
     await tick();
     eq(order(list), 'estate-list-item-50,flat124,land,noprice,added', 'listings the site adds or moves are sorted too');
     await chrome.storage.sync.set({unit: 'ft²'});
-    eq(sortShown(), '⇅ desc ft² true', 'sort button follows the unit');
+    eq(sortShown(), '⇅ desc/ft² true', 'sort button follows the unit');
     await chrome.storage.sync.set({unit: 'm²'});
     sortButton.click();
     await tick();
-    eq(`${sortShown()} ${[...list.children].map(li => li.style.order).join('')}`, '⇅ m² false ', "third click: sreality's order back");
+    eq(`${sortShown()} ${[...list.children].map(li => li.style.order).join('')}`, '⇅ /m² false ', "third click: sreality's order back");
+    const sizeShown = () => `${sizeButton.textContent} ${sizeButton.getAttribute('aria-pressed')}`;
+    document.getElementById('added').remove();
+    await tick();
+    eq(sizeShown(), '⇅ size false', 'size button off');
+    sizeButton.click();
+    await tick();
+    eq(`${sizeShown()} ${order(list)}`, '⇅ asc size true estate-list-item-50,noprice,flat124,land', 'smallest first');
+    sizeButton.click();
+    await tick();
+    eq(`${sizeShown()} ${order(list)}`, '⇅ desc size true land,flat124,noprice,estate-list-item-50', 'largest first');
+    sortButton.click();
+    await tick();
+    eq(`${sortShown()} ${sizeShown()} ${order(list)}`, '⇅ asc/m² true ⇅ size false land,flat124,estate-list-item-50,noprice', 'price sort replaces the size sort');
+    sizeButton.click();
+    await tick();
+    eq(`${sortShown()} ${sizeShown()}`, '⇅ /m² false ⇅ asc size true', 'size sort replaces the price sort');
+    await chrome.storage.sync.set({sizeSort: ''});
+    eq([...list.children].map(li => li.style.order).join(''), '', "size sort off: sreality's order back");
     const pages = () => `${pageSelect.value}/${pageSelect.options.length}`;
     const apiCall = () => new URL(fetched.findLast(u => u.startsWith('/api/')), location.href).searchParams;
     const ours = () => document.querySelector('[data-sru]');
@@ -220,7 +251,7 @@
     history.replaceState(null, '', '/test.html');
     document.body.append(document.createElement('div'));
     await tick();
-    eq(limitPill.hidden, true, 'pages switcher hidden outside search');
+    eq(`${limitPill.hidden} ${adsPill.hidden}`, 'true true', 'pages switcher and adv button hidden outside search');
 
     document.title = failures.length ? 'FAIL' : 'PASS';
     document.body.insertAdjacentHTML('beforeend', `<pre>${document.title}\n${failures.join('\n')}</pre>`);
