@@ -9,6 +9,7 @@
 <p id="none">Cena na vyžádání</p>
 <p id="area">Prodej rodinného domu 180&nbsp;m², pozemek 1&nbsp;068&nbsp;m²</p>
 <p id="perm2">125 000 Kč/m²</p>
+<div><h1 data-e2e="detail-heading" id="detail">Prodej rodinného domu 180&nbsp;m², pozemek 444&nbsp;m²<br>Medkova, Praha - Chodov</h1><div><div><p>19&nbsp;900&nbsp;000&nbsp;Kč</p></div></div></div>
 <script id="__NEXT_DATA__" type="application/json">{"buildId": "b1"}</script>
 <ul data-e2e="estates-list" style="display:flex"><li id="flat124"><p>Prodej bytu 4+1 124&nbsp;m²</p><p>Praha 5</p><p>6&nbsp;200&nbsp;000&nbsp;Kč</p></li><li id="estate-list-item-50"><a href="/detail/prodej/byt/2+kk/praha/50"><div><button>♡</button><div class="MuiChip-root">TIP</div><ul><li><img src="//img.test/50.png?fl=res,800" srcset="//img.test/50.png?fl=res,800"></li><li><img src="//img.test/51.png?fl=res,800"></li></ul></div><div><p>Prodej bytu 2+kk 50&nbsp;m²</p><p>Praha</p><p>4&nbsp;000&nbsp;000&nbsp;Kč</p></div></a></li><li id="noprice"><p>Prodej bytu 3+kk 80&nbsp;m²</p><p>Cena na vyžádání</p></li><li id="land"><p>Prodej pozemku 1&nbsp;000&nbsp;m²</p><p>1&nbsp;500&nbsp;Kč/m²</p></li><li id="broker-tip-item-1-172703"><p>TIP: Koupím byt</p></li><li data-e2e="nativni" id="estate-list-native-8"><p>Reklama</p></li></ul>
 <script>
@@ -90,6 +91,9 @@
     eq(title('land'), `Prodej pozemku 1 000 m² - ${fmt(60, 'EUR')}/m²`, 'title of a listing priced per m²');
     eq(title('noprice'), 'Prodej bytu 3+kk 80 m²', 'title without price per m²');
     eq(document.querySelector('#flat124 p').title, 'Prodej bytu 4+1 124 m²', 'title tooltip without price per m²');
+    const heading = document.getElementById('detail');
+    eq(heading.firstChild.data, `Prodej rodinného domu 180\u00a0m², pozemek 444\u00a0m² - ${fmt(19900000 / 180 / 25, 'EUR')}/m²`, 'detail page title with price per m²');
+    eq(heading.lastChild.data, 'Medkova, Praha - Chodov', 'detail page place untouched');
 
     await chrome.storage.sync.set({currency: 'USD'});
     eq(text('main'), fmt(1095000, 'USD'), 'switch to USD');
@@ -99,6 +103,7 @@
     eq(text('area'), `Prodej rodinného domu ${sqft(180)}, pozemek ${sqft(1068)}`, 'area in ft²');
     eq(title('flat124'), `Prodej bytu 4+1 ${sqft(124)} - ${fmt(2500 / 10.7639, 'USD')}/ft²`, 'layout 4+1 is not part of the area; title price per ft²');
     eq(text('perm2'), `${fmt(6250 / 10.7639, 'USD')}/ft²`, 'price per ft²');
+    eq(heading.firstChild.data, `Prodej rodinného domu ${sqft(180)}, pozemek ${sqft(444)} - ${fmt(19900000 / 180 / 20 / 10.7639, 'USD')}/ft²`, 'detail page price per ft²');
 
     await chrome.storage.sync.set({currency: 'CZK'});
     eq(text('perm2'), `${fmt(125000 / 10.7639, 'CZK')}/ft²`, 'CZK price per ft²');
@@ -133,8 +138,8 @@
     await tick();
     eq(text('main'), fmt(40, 'EUR'), 'text re-rendered by the site');
 
-    const [limitPill, adsPill] = [...ui.querySelectorAll('.pill')].slice(-2);
-    const [limitSelect, pageSelect, sortButton, sizeButton] = limitPill.children;
+    const [limitPill, adsPill] = [...ui.querySelectorAll('.bar .pill')].slice(-2);
+    const [limitSelect, pageSelect, priceButton, sortButton, sizeButton] = limitPill.children;
     const adsButton = adsPill.firstElementChild;
     const list = document.querySelector('[data-e2e="estates-list"]');
     const tip = document.getElementById('broker-tip-item-1-172703');
@@ -153,30 +158,30 @@
     tip.remove();
     native.remove();
     await tick();
-    eq(limitSelect.options.length, 7, 'page sizes up to 1000');
+    eq([...limitSelect.options].map(o => o.value).join(), '0,50,100,250,500,750,1000,2000,2500,5000', 'page sizes up to 5000');
     const order = l => [...l.children].sort((a, b) => a.style.order - b.style.order).map(li => li.id).join();
     const sortShown = () => `${sortButton.textContent} ${sortButton.getAttribute('aria-pressed')}`;
-    eq(sortShown(), '⇅ /m² false', 'sort button off');
+    eq(sortShown(), '⇅ €/m² false', 'sort button off');
     eq([...list.children].map(li => li.style.order).join(''), '', "sreality's order");
     sortButton.click();
     await tick();
-    eq(sortShown(), '⇅ asc/m² true', 'sort button ascending');
+    eq(sortShown(), '⇅ asc €/m² true', 'sort button ascending');
     eq(sortButton.ariaLabel, 'Sort the listings on this page by price per m²: cheapest first', 'sort button label');
     eq(order(list), 'land,flat124,estate-list-item-50,noprice', 'sorted by price per m² from the original CZK texts, no price last');
     sortButton.click();
     await tick();
-    eq(sortShown(), '⇅ desc/m² true', 'sort button descending');
+    eq(sortShown(), '⇅ desc €/m² true', 'sort button descending');
     eq(order(list), 'estate-list-item-50,flat124,land,noprice', 'most expensive per m² first, no price still last');
     list.append(Object.assign(document.createElement('li'), {id: 'added'}));
     list.prepend(document.getElementById('land')); // the site re-sorting
     await tick();
     eq(order(list), 'estate-list-item-50,flat124,land,noprice,added', 'listings the site adds or moves are sorted too');
     await chrome.storage.sync.set({unit: 'ft²'});
-    eq(sortShown(), '⇅ desc/ft² true', 'sort button follows the unit');
+    eq(sortShown(), '⇅ desc €/ft² true', 'sort button follows the unit');
     await chrome.storage.sync.set({unit: 'm²'});
     sortButton.click();
     await tick();
-    eq(`${sortShown()} ${[...list.children].map(li => li.style.order).join('')}`, '⇅ /m² false ', "third click: sreality's order back");
+    eq(`${sortShown()} ${[...list.children].map(li => li.style.order).join('')}`, '⇅ €/m² false ', "third click: sreality's order back");
     const sizeShown = () => `${sizeButton.textContent} ${sizeButton.getAttribute('aria-pressed')}`;
     document.getElementById('added').remove();
     await tick();
@@ -189,12 +194,35 @@
     eq(`${sizeShown()} ${order(list)}`, '⇅ desc size true land,flat124,noprice,estate-list-item-50', 'largest first');
     sortButton.click();
     await tick();
-    eq(`${sortShown()} ${sizeShown()} ${order(list)}`, '⇅ asc/m² true ⇅ size false land,flat124,estate-list-item-50,noprice', 'price sort replaces the size sort');
+    eq(`${sortShown()} ${sizeShown()} ${order(list)}`, '⇅ asc €/m² true ⇅ size false land,flat124,estate-list-item-50,noprice', 'price sort replaces the size sort');
     sizeButton.click();
     await tick();
-    eq(`${sortShown()} ${sizeShown()}`, '⇅ /m² false ⇅ asc size true', 'size sort replaces the price sort');
+    eq(`${sortShown()} ${sizeShown()}`, '⇅ €/m² false ⇅ asc size true', 'size sort replaces the price sort');
     await chrome.storage.sync.set({sizeSort: ''});
     eq([...list.children].map(li => li.style.order).join(''), '', "size sort off: sreality's order back");
+    const priceShown = () => `${priceButton.textContent} ${priceButton.getAttribute('aria-pressed')}`;
+    eq(priceShown(), '⇅ € false', 'price button off');
+    priceButton.click();
+    await tick();
+    eq(`${priceShown()} ${order(list)}`, '⇅ asc € true land,estate-list-item-50,flat124,noprice', 'cheapest first, a price per m² times the area, no price last');
+    eq(priceButton.ariaLabel, 'Sort the listings on this page by price: cheapest first', 'price button label');
+    priceButton.click();
+    await tick();
+    eq(`${priceShown()} ${order(list)}`, '⇅ desc € true flat124,estate-list-item-50,land,noprice', 'most expensive first, no price still last');
+    sizeButton.click();
+    await tick();
+    eq(`${priceShown()} ${sizeShown()}`, '⇅ € false ⇅ asc size true', 'size sort replaces the price sort');
+    priceButton.click();
+    await tick();
+    eq(`${priceShown()} ${sizeShown()} ${sortShown()} ${order(list)}`, '⇅ asc € true ⇅ size false ⇅ €/m² false land,estate-list-item-50,flat124,noprice',
+      'price sort replaces the size sort');
+    sortButton.click();
+    await tick();
+    eq(`${priceShown()} ${sortShown()}`, '⇅ € false ⇅ asc €/m² true', 'price per m² sort replaces the price sort');
+    await chrome.storage.sync.set({currency: 'CZK'});
+    eq(`${priceButton.textContent} | ${sortButton.textContent}`, '⇅ Kč | ⇅ asc Kč/m²', 'sort buttons show the currency');
+    await chrome.storage.sync.set({currency: 'EUR', sort: ''});
+    eq([...list.children].map(li => li.style.order).join(''), '', "sorts off: sreality's order back");
     const pages = () => `${pageSelect.value}/${pageSelect.options.length}`;
     const apiCall = () => new URL(fetched.findLast(u => u.startsWith('/api/')), location.href).searchParams;
     const ours = () => document.querySelector('[data-sru]');
@@ -243,6 +271,10 @@
     eq(pageUrl(3).replace(location.origin, ''), '/hledani/prodej/byty?strana=3', 'page 3 link');
     eq(pageUrl(1).replace(location.origin, ''), '/hledani/prodej/byty', 'page 1 link');
 
+    await chrome.storage.sync.set({limit: 5000});
+    await tick();
+    eq(`${apiCall().get('limit')} ${apiCall().get('offset')} ${limitSelect.value} ${pages()}`, '5000 0 5000 1/1', '5000 a page: page 9 of 1 shows the only page');
+
     apiStatus = 422;
     await chrome.storage.sync.set({limit: 500});
     await tick();
@@ -258,6 +290,65 @@
     document.body.append(document.createElement('div'));
     await tick();
     eq(`${limitPill.hidden} ${adsPill.hidden}`, 'true true', 'pages switcher and adv button hidden outside search');
+
+    const m1 = mortgage(1e5, 6, 30), m0 = mortgage(12000, 0, 1);
+    eq(m1.pay.toFixed(2), '599.55', 'monthly payment of 100,000 at 6 % for 30 years');
+    eq(`${m1.months.length} ${m1.months[0].interest.toFixed(2)} ${m1.months.reduce((s, x) => s + x.principal, 0).toFixed(2)} ${m1.months.at(-1).balance.toFixed(2)}`,
+      '360 500.00 100000.00 0.00', 'first month interest, the whole loan repaid, nothing left');
+    eq(`${m0.pay} ${m0.months.length} ${m0.months[0].interest} ${m0.months.at(-1).balance}`, '1000 12 0 0', 'no interest: the loan in equal parts');
+
+    const calcBox = ui.querySelector('.calc');
+    const [calcForm] = calcBox.children;
+    const calcButton = calcBox.querySelector('.pill button');
+    const f = calcForm.elements;
+    const opened = () => `${!calcForm.hidden} ${calcButton.getAttribute('aria-expanded')}`;
+    const fields = () => ['area', 'perArea', 'price', 'loan', 'rate', 'years'].map(k => f[k].value).join(' ');
+    const units = () => [...calcForm.querySelectorAll('[data-u]')].map(e => e.textContent).join(' | ');
+    const type = (name, value) => { f[name].value = value; f[name].dispatchEvent(new Event('input', {bubbles: true})); };
+    const sum = () => calcForm.querySelector('.sum').textContent;
+    eq(`${opened()} ${calcButton.textContent}`, 'false false ⌂ mortgage', 'mortgage calculator closed');
+    calcButton.click();
+    eq(opened(), 'true true', 'mortgage button opens the calculator');
+    eq(fields(), '180 4422 796000 636800 4.5 30', 'filled from the detail page: area, price per m², price and an 80 % loan');
+    eq(units(), 'Price from area × price per m² | m² | Price per m² | €/m² | € | €', 'units follow the settings');
+    const pay = mortgage(15920000, 4.5, 30).pay; // in Kč
+    eq(sum(), `${fmt(pay / 25, 'EUR')} a month, 360 payments` + `Loan ${fmt(636800, 'EUR')}, 80 % of ${fmt(796000, 'EUR')}`
+      + `Interest ${fmt((pay * 360 - 15920000) / 25, 'EUR')}, paid in total ${fmt(pay * 360 / 25, 'EUR')}`, 'monthly payment, loan and interest');
+    const rows = calcForm.querySelectorAll('tbody tr');
+    eq(`${calcForm.querySelectorAll('.chart g').length} ${rows.length} ${rows[359].lastChild.textContent}`, `30 360 ${fmt(0, 'EUR')}`,
+      'a bar a year, a row a payment, nothing left at the end');
+    eq(calcForm.querySelector('.chart title').textContent.startsWith('Year 1: principal €'), true, 'bar tooltip');
+
+    type('area', '100');
+    eq(fields(), '100 4422 442222 353778 4.5 30', 'area × price per m² gives the price, and an 80 % loan');
+    type('loan', '300000');
+    eq(`${fields()} ${sum().includes(`Loan ${fmt(300000, 'EUR')}, 68 % of ${fmt(442222, 'EUR')}`)}`, '100 4422 442222 300000 4.5 30 true', 'loan typed in: the price stays');
+    type('rate', '5');
+    eq(fields(), '100 4422 442222 300000 5 30', 'other interest: the loan stays');
+    eq(`${f.price.readOnly} ${f.area.disabled}`, 'true false', 'price computed from the area');
+    f.fromArea.click();
+    eq(`${f.price.readOnly} ${f.area.disabled} ${f.perArea.disabled} ${fields()}`, 'false true true 100 4422 442222 300000 5 30', 'unchecked: the price is typed in');
+    type('price', '500000');
+    eq(fields(), '100 4422 500000 400000 5 30', 'typed price, 80 % loan');
+    await chrome.storage.sync.set({currency: 'CZK', unit: 'ft²'});
+    eq(`${fields()} | ${units()}`, '1076 10271 12500000 10000000 5 30 | Price from area × price per ft² | ft² | Price per ft² | Kč/ft² | Kč | Kč',
+      'switching the currency and unit converts the fields');
+    await chrome.storage.sync.set({currency: 'EUR', unit: 'm²'});
+    type('rate', '0');
+    eq(calcForm.querySelector('.sum b').textContent, fmt(400000 / 360, 'EUR'), 'no interest: the loan in equal parts');
+    type('years', '');
+    eq(`${calcForm.querySelector('.hint').hidden} ${calcForm.querySelector('.out').hidden}`, 'false true', 'no term: no results');
+    type('years', '20');
+
+    document.body.click();
+    eq(opened(), 'false false', 'a click elsewhere closes the calculator');
+    calcButton.click();
+    eq(`${opened()} ${fields()}`, 'true true 100 4422 500000 400000 0 20', 'reopened with the same numbers');
+    document.body.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+    eq(`${opened()} ${ui.activeElement === calcButton}`, 'false false true', 'Escape closes it');
+    calcButton.click();
+    calcButton.click();
+    eq(opened(), 'false false', 'the mortgage button closes it too');
 
     document.title = failures.length ? 'FAIL' : 'PASS';
     document.body.insertAdjacentHTML('beforeend', `<pre>${document.title}\n${failures.join('\n')}</pre>`);

@@ -8,7 +8,8 @@ const PRICE = new RegExp(NUM + 'Kč(/m²)?', 'g');
 const AREA = new RegExp(NUM + 'm²', 'g');
 const SQFT_PER_M2 = 10.7639;
 const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']);
-const DEFAULTS = {currency: 'EUR', favorites: ['EUR', 'USD'], unit: 'm²', limit: 0, sort: '', sizeSort: '', ads: false};
+const DEFAULTS = {currency: 'EUR', favorites: ['EUR', 'USD'], unit: 'm²', limit: 0, sort: '', sizeSort: '', priceSort: '', ads: false};
+const DETAIL = '[data-e2e="detail-heading"]'; // the detail page's title: <h1>Prodej rodinného domu 180 m², pozemek 444 m²<br>Medkova, Praha</h1>
 const state = new WeakMap(); // text node -> {orig, shown}
 const areaFormat = new Intl.NumberFormat(undefined, {maximumFractionDigits: 0});
 const currencyNames = new Intl.DisplayNames(undefined, {type: 'currency'});
@@ -19,10 +20,12 @@ let currency, money; // the currency shown (settings.currency if its rate is kno
 
 const num = (int, dec) => Number(`${int.replace(/\D/g, '')}.${dec || 0}`);
 
+const shown = czk => czk * rates[currency].amount / rates[currency].rate; // Kč in the shown currency
+const perUnit = () => settings.unit === 'ft²' ? SQFT_PER_M2 : 1; // shown units in a m²
+
 // Kč, or Kč per m², in the shown currency and unit: "€899,384", "€4,524/m²", "€420/ft²"
 function formatPrice(czk, perM2) {
-  const {rate, amount} = rates[currency];
-  return money.format(czk * amount / rate / (perM2 && settings.unit === 'ft²' ? SQFT_PER_M2 : 1)) + (perM2 ? `/${settings.unit}` : '');
+  return money.format(shown(czk) / (perM2 ? perUnit() : 1)) + (perM2 ? `/${settings.unit}` : '');
 }
 
 function convert(text) {
@@ -41,9 +44,10 @@ function convertNode(node) {
     s = {orig: node.data};
     state.set(node, s);
   }
-  // listing titles ("Prodej bytu 3+kk 68 m²", the card's first <p>) get " - €4,524/m²"; read before s.shown changes
-  const card = el.closest('[data-e2e="estates-list"] > li');
-  const perM2 = card?.querySelector('p') === el ? pricePerM2(card) : Infinity;
+  // listing titles ("Prodej bytu 3+kk 68 m²", the card's first <p>, or the detail page's heading followed by its price)
+  // get " - €4,524/m²"; read before s.shown changes
+  const card = el.matches(DETAIL) ? el.parentElement : el.closest('[data-e2e="estates-list"] > li');
+  const perM2 = card?.querySelector(`p, ${DETAIL}`) === el ? pricePerM2(card) : Infinity;
   s.shown = convert(s.orig) + (perM2 < Infinity ? ` - ${formatPrice(perM2, true)}` : '');
   if (node.data === s.shown) return;
   node.data = s.shown;
@@ -59,8 +63,9 @@ function walk(root) {
 }
 
 // Sorting by price per m² on sreality needs a premium account, so this sorts the listings already on the page.
-// settings.sort sorts by price per m², settings.sizeSort by area; setting one clears the other.
+// settings.priceSort sorts by price, settings.sort by price per m², settings.sizeSort by area; setting one clears the others.
 const NEXT_SORT = {'': 'asc', asc: 'desc', desc: ''}; // '': sreality's order
+const SORTS = {priceSort: wholePrice, sort: pricePerM2, sizeSort: size}; // the setting -> the listing's value it sorts by
 
 // The card's original texts ("Prodej bytu 4+1 124 m²", "18 060 650 Kč" or "1 500 Kč/m²").
 function cardText(card) {
@@ -73,30 +78,39 @@ function cardText(card) {
   return text;
 }
 
-// Listings without a price or area go last.
-function pricePerM2(card) {
+// The card's first price in Kč, whether that's per m², and its first area in m² (the one in its title); Infinity if missing.
+function cardNumbers(card) {
   const text = cardText(card);
   const [price] = text.matchAll(PRICE), [area] = text.matchAll(AREA);
-  if (price?.[3]) return num(price[1], price[2]); // already per m²
-  return price && area ? num(price[1], price[2]) / num(area[1], area[2]) : Infinity;
+  return {czk: price ? num(price[1], price[2]) : Infinity, perM2: !!price?.[3], m2: area ? num(area[1], area[2]) : Infinity};
 }
 
-// The first area on the card, in m²: the one in its title.
+// What the listings sort by. Listings without it (Infinity) go last.
+function pricePerM2(card) {
+  const {czk, perM2, m2} = cardNumbers(card);
+  return perM2 ? czk : m2 < Infinity ? czk / m2 : Infinity;
+}
+
+// The price of the whole listing (a rent is per month): a price per m² times the area.
+function wholePrice(card) {
+  const {czk, perM2, m2} = cardNumbers(card);
+  return !perM2 ? czk : m2 < Infinity ? czk * m2 : Infinity;
+}
+
 function size(card) {
-  const [area] = cardText(card).matchAll(AREA);
-  return area ? num(area[1], area[2]) : Infinity;
+  return cardNumbers(card).m2;
 }
 
 // CSS order keeps the DOM as React left it, so React can still re-render the list correctly.
 function sortListings() {
-  const dir = {asc: 1, desc: -1}[settings.sizeSort || settings.sort];
-  const value = settings.sizeSort ? size : pricePerM2;
+  const key = Object.keys(SORTS).find(k => settings[k]);
+  const dir = {asc: 1, desc: -1}[settings[key]];
   for (const list of document.querySelectorAll(LIST)) {
     if (!dir) {
       for (const li of list.children) li.style.order = '';
       continue;
     }
-    [...list.children].map(li => [value(li), li])
+    [...list.children].map(li => [SORTS[key](li), li])
       .sort(([a], [b]) => (a === Infinity) - (b === Infinity) || dir * (a - b) || 0) // no value: last either way
       .forEach(([, li], i) => li.style.order = i);
   }
@@ -104,7 +118,7 @@ function sortListings() {
 
 // Listings per page: sreality shows 20 (+2 tips) and its URLs take no page size, but its API takes any limit.
 // Its server turns the page URL into API filters, so this asks the server for them (_next/data) and then calls the API itself.
-const LIMITS = [0, 50, 100, 250, 500, 750, 1000]; // 0: sreality's own pages
+const LIMITS = [0, 50, 100, 250, 500, 750, 1000, 2000, 2500, 5000]; // 0: sreality's own pages
 const MAX_RESULTS = 1e4; // the API refuses offset + limit above this, and sreality's pages stop there too
 const SEARCH_PATH = /^(\/[a-z]{2})?\/(hledani|search)(\/|$)/;
 const LIST = '[data-e2e="estates-list"]';
@@ -272,24 +286,67 @@ const host = document.createElement('div');
 const shadow = host.attachShadow({mode: 'open'});
 shadow.innerHTML = `<style>
   .bar { position: fixed; left: 16px; bottom: 16px; z-index: 2147483647; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px;
-         max-width: calc(100vw - 32px); font: 600 13px/1 system-ui, sans-serif; }
+         max-width: calc(100vw - 180px); font: 600 13px/1 system-ui, sans-serif; } /* leaves room for the mortgage button */
   .pill { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: #fff; border-radius: 17px; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); }
-  span { display: contents; }
+  .pill > span { display: contents; }
   button, select { all: unset; cursor: pointer; padding: 7px 11px; border-radius: 999px; color: #232b3a; }
   [aria-pressed="true"] { background: #cc0000; color: #fff; }
   .pill:first-child select { width: 1ch; text-align: center; } /* otherwise as wide as the longest currency name */
   button:disabled { cursor: default; opacity: .4; }
   :focus-visible { outline: 2px solid #232b3a; outline-offset: 1px; }
   [hidden] { display: none !important; }
+  .calc { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+          max-height: calc(100vh - 32px); font: 600 13px/1 system-ui, sans-serif; color: #232b3a; }
+  form { box-sizing: border-box; width: 300px; max-width: calc(100vw - 32px); min-height: 0; overflow: auto; padding: 12px; background: #fff;
+         border-radius: 17px; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); font-weight: 400; line-height: 1.4; }
+  label { display: grid; grid-template-columns: 1fr 8em 4.5em; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .check { display: flex; }
+  input[type="number"] { font: inherit; color: inherit; min-width: 0; padding: 3px 6px; border: 1px solid #c9ccd3; border-radius: 6px; text-align: right; }
+  input:disabled, input[readonly] { background: #f1f2f4; }
+  p { margin: 8px 0; }
+  .sum b { font-size: 18px; }
+  .chart { display: block; width: 100%; height: 80px; }
+  .chart rect { stroke: #fff; } /* the gap between the bars and their two parts */
+  .chart .hit { fill: transparent; stroke: none; }
+  .chart g:hover .hit { fill: #f1f2f4; }
+  .p { fill: #2a78d6; background: #2a78d6; }
+  .i { fill: #eb6834; background: #eb6834; }
+  .legend { color: #626d82; font-size: 12px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; border-radius: 2px; vertical-align: -1px; }
+  summary { cursor: pointer; font-weight: 600; }
+  .scroll { max-height: 180px; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 2px 4px; text-align: right; }
+  th { position: sticky; top: 0; background: #fff; }
 </style><div class="bar">
   <div class="pill" role="group" aria-label="Price currency"><span></span><select aria-label="Add or remove a favorite currency"></select></div>
   <div class="pill" role="group" aria-label="Area unit"></div>
-  <div class="pill" role="group" aria-label="Listings" hidden><select aria-label="Listings per page"></select><select aria-label="Page"></select><button></button><button></button></div>
+  <div class="pill" role="group" aria-label="Listings" hidden><select aria-label="Listings per page"></select><select aria-label="Page"></select><button></button><button></button><button></button></div>
   <div class="pill" role="group" aria-label="Advertisements" hidden><button></button></div>
+</div><div class="calc">
+  <form aria-label="Mortgage calculator" hidden>
+    <label class="check"><input type="checkbox" name="fromArea" checked><span data-u="Price from area × price per m²"></span></label>
+    <label>Area<input type="number" name="area" min="0" step="any"><span data-u="m²"></span></label>
+    <label><span data-u="Price per m²"></span><input type="number" name="perArea" min="0" step="any"><span data-u="¤/m²"></span></label>
+    <label>Price<input type="number" name="price" min="0" step="any"><span data-u="¤"></span></label>
+    <label>Loan<input type="number" name="loan" min="0" step="any"><span data-u="¤"></span></label>
+    <label>Interest<input type="number" name="rate" min="0" step="any" value="4.5"><span>% a year</span></label>
+    <label>Term<input type="number" name="years" min="1" max="50" step="any" value="30"><span>years</span></label>
+    <p class="hint">Fill in the loan, the interest and the term.</p>
+    <div class="out">
+      <p class="sum"></p>
+      <svg class="chart" viewBox="0 0 276 80" preserveAspectRatio="none" role="img" aria-label="Principal and interest paid each year"></svg>
+      <p class="legend"><i class="p"></i>Principal <i class="i"></i>Interest, paid each year. Hover a year for its numbers.</p>
+      <details><summary>All payments</summary><div class="scroll"><table>
+        <thead><tr><th>#</th><th>Interest</th><th>Principal</th><th>Balance</th></tr></thead><tbody></tbody>
+      </table></div></details>
+    </div>
+  </form>
+  <div class="pill"><button type="button" aria-expanded="false" title="Mortgage calculator: monthly payment, interest and all payments">⌂ mortgage</button></div>
 </div>`;
-const [currencyPill, unitPill, limitPill, adsPill] = shadow.querySelectorAll('.pill');
+const [currencyPill, unitPill, limitPill, adsPill] = shadow.querySelectorAll('.bar .pill');
 const [favs, picker] = currencyPill.children;
-const [limitSelect, pageSelect, sortButton, sizeButton] = limitPill.children;
+const [limitSelect, pageSelect, priceButton, sortButton, sizeButton] = limitPill.children;
 const adsButton = adsPill.firstElementChild;
 
 function button(key, value, title) {
@@ -327,8 +384,9 @@ limitSelect.addEventListener('change', async () => {
   if (currentPage() > 1) location.assign(pageUrl(1)); // a new page size starts on page 1
 });
 pageSelect.addEventListener('change', () => location.assign(pageUrl(Number(pageSelect.value))));
-sortButton.addEventListener('click', () => chrome.storage.sync.set({sort: NEXT_SORT[settings.sort], sizeSort: ''}));
-sizeButton.addEventListener('click', () => chrome.storage.sync.set({sizeSort: NEXT_SORT[settings.sizeSort], sort: ''}));
+for (const [b, key] of [[priceButton, 'priceSort'], [sortButton, 'sort'], [sizeButton, 'sizeSort']]) {
+  b.addEventListener('click', () => chrome.storage.sync.set({priceSort: '', sort: '', sizeSort: '', [key]: NEXT_SORT[settings[key]]}));
+}
 adsButton.addEventListener('click', () => chrome.storage.sync.set({ads: !settings.ads}));
 
 function renderFavorites() {
@@ -360,24 +418,109 @@ function render() {
   for (const b of shadow.querySelectorAll('button[data-key]')) {
     b.setAttribute('aria-pressed', b.dataset.value === (b.dataset.key === 'unit' ? settings.unit : currency));
   }
-  const {sort, sizeSort, unit, ads} = settings;
-  sizeButton.textContent = `⇅ ${sizeSort ? `${sizeSort} ` : ''}size`;
-  sizeButton.setAttribute('aria-pressed', !!sizeSort);
-  sizeButton.title = sizeButton.ariaLabel = 'Sort the listings on this page by size: '
-    + {'': "sreality's order", asc: 'smallest first', desc: 'largest first'}[sizeSort];
+  const {unit, ads} = settings;
+  const symbol = money.formatToParts(0).find(p => p.type === 'currency').value; // "€", "Kč", "$"
+  for (const [b, key, label, by, low, high] of [
+    [priceButton, 'priceSort', symbol, 'price', 'cheapest first', 'most expensive first'],
+    [sortButton, 'sort', `${symbol}/${unit}`, `price per ${unit}`, 'cheapest first', 'most expensive first'],
+    [sizeButton, 'sizeSort', 'size', 'size', 'smallest first', 'largest first'],
+  ]) {
+    const dir = settings[key];
+    b.textContent = `⇅ ${dir ? `${dir} ` : ''}${label}`;
+    b.setAttribute('aria-pressed', !!dir);
+    b.title = b.ariaLabel = `Sort the listings on this page by ${by}: ${{'': "sreality's order", asc: low, desc: high}[dir]}`;
+  }
   document.documentElement.toggleAttribute('data-sru-ads', ads);
   adsButton.textContent = `adv ${ads ? '✓' : '✕'}`;
   adsButton.setAttribute('aria-pressed', ads);
   adsButton.title = adsButton.ariaLabel = `Advertisements (sreality's tips) among the listings: ${ads ? 'shown' : 'hidden'}`;
-  sortButton.textContent = `⇅ ${sort}/${unit}`;
-  sortButton.setAttribute('aria-pressed', !!sort);
-  sortButton.title = sortButton.ariaLabel = `Sort the listings on this page by price per ${unit}: `
-    + {'': "sreality's order", asc: 'cheapest first', desc: 'most expensive first'}[sort];
   const r = rates[currency];
   currencyPill.title = ratesError ? `Exchange rate unavailable: ${ratesError}`
     : currency === 'CZK' ? '' : `${r.source}, ${r.validFor}: ${r.amount} ${currency} = ${r.rate} Kč`;
+  for (const e of calcForm.querySelectorAll('[data-u]')) e.textContent = e.dataset.u.replace('¤', symbol).replace('m²', unit);
+  fillCalc();
   walk(document.body);
 }
+
+// The mortgage calculator in the bottom-right corner. It keeps amounts in Kč and areas in m², so switching the currency or unit converts them.
+const LTV = 0.8; // the loan sreality's own calculator assumes: 80 % of the price
+const calc = {area: NaN, perArea: NaN, price: NaN, loan: NaN, filledFrom: ''}; // m², Kč per m², Kč, Kč; the detail page it was filled from
+const toShown = {area: m2 => m2 * perUnit(), perArea: czk => shown(czk) / perUnit(), price: shown, loan: shown};
+const calcBox = shadow.querySelector('.calc');
+const [calcForm, calcPill] = calcBox.children;
+const calcButton = calcPill.firstElementChild;
+const calcInputs = calcForm.elements;
+const [hint, out] = calcForm.querySelectorAll('.hint, .out');
+const [sum, chart, tbody] = out.querySelectorAll('.sum, .chart, tbody');
+
+// A loan repaid in equal monthly payments: the payment, and for each month the interest, the principal and the balance left after it.
+function mortgage(loan, ratePerYear, years) {
+  const r = ratePerYear / 1200, n = Math.round(years * 12);
+  const pay = r ? loan * r / (1 - (1 + r) ** -n) : loan / n;
+  const months = [];
+  for (let balance = loan; months.length < n;) {
+    const interest = balance * r;
+    balance -= pay - interest;
+    months.push({interest, principal: pay - interest, balance: Math.max(balance, 0)}); // max: rounding leaves -0.000001 at the end
+  }
+  return {pay, months};
+}
+
+// Writes the fields, except the one being typed in, in the shown currency and unit, and the results.
+function fillCalc(typing) {
+  for (const k in toShown) if (k !== typing) calcInputs[k].value = Number.isFinite(calc[k]) ? Math.round(toShown[k](calc[k])) : '';
+  const fromArea = calcInputs.fromArea.checked, rate = calcInputs.rate.valueAsNumber, years = calcInputs.years.valueAsNumber, {loan, price} = calc;
+  calcInputs.area.disabled = calcInputs.perArea.disabled = !fromArea;
+  calcInputs.price.readOnly = fromArea;
+  const ok = loan > 0 && loan < Infinity && rate >= 0 && years > 0 && years <= 50;
+  hint.hidden = ok;
+  out.hidden = !ok;
+  if (!ok) return;
+  const {pay, months} = mortgage(loan, rate, years);
+  const m = czk => money.format(shown(czk));
+  const total = (list, k) => list.reduce((s, x) => s + x[k], 0);
+  sum.innerHTML = `<b>${m(pay)}</b> a month, ${months.length} payments<br>`
+    + `Loan ${m(loan)}${price > 0 && price < Infinity ? `, ${Math.round(loan / price * 100)} % of ${m(price)}` : ''}<br>`
+    + `Interest ${m(total(months, 'interest'))}, paid in total ${m(pay * months.length)}`;
+  const yearly = [];
+  for (let i = 0; i < months.length; i += 12) yearly.push(months.slice(i, i + 12));
+  const max = Math.max(...yearly.map(y => total(y, 'principal') + total(y, 'interest'))), w = 276 / yearly.length;
+  chart.innerHTML = yearly.map((y, i) => {
+    const principal = total(y, 'principal'), interest = total(y, 'interest'), hp = principal / max * 80, hi = interest / max * 80;
+    return `<g><title>Year ${i + 1}: principal ${m(principal)}, interest ${m(interest)}, balance ${m(y.at(-1).balance)}</title>`
+      + `<rect class="hit" x="${i * w}" width="${w}" height="80"/><rect class="p" x="${i * w}" y="${80 - hp}" width="${w}" height="${hp}"/>`
+      + `<rect class="i" x="${i * w}" y="${80 - hp - hi}" width="${w}" height="${hi}"/></g>`;
+  }).join('');
+  tbody.innerHTML = months.map((x, i) => `<tr><td>${i + 1}</td><td>${m(x.interest)}</td><td>${m(x.principal)}</td><td>${m(x.balance)}</td></tr>`).join('');
+}
+
+function toggleCalc(open) {
+  const card = document.querySelector(DETAIL)?.parentElement;
+  if (open && card && calc.filledFrom !== location.pathname) { // a listing's detail page not filled in yet: start from its price
+    Object.assign(calc, {filledFrom: location.pathname, area: size(card), perArea: pricePerM2(card), price: wholePrice(card)});
+    calc.loan = calc.price * LTV;
+  }
+  calcForm.hidden = !open;
+  calcButton.setAttribute('aria-expanded', open);
+  if (open) fillCalc();
+}
+
+calcForm.addEventListener('input', ({target: {name, valueAsNumber, checked}}) => {
+  if (name in toShown) calc[name] = valueAsNumber / toShown[name](1);
+  if (['area', 'perArea', 'price'].includes(name) || name === 'fromArea' && checked) { // a new price, which resets the loan
+    if (calcInputs.fromArea.checked) calc.price = calc.area * calc.perArea;
+    calc.loan = calc.price * LTV;
+  }
+  fillCalc(name);
+});
+calcButton.addEventListener('click', () => toggleCalc(calcForm.hidden));
+// closes on a click outside it; capture, as sreality's own handlers may stop the click
+document.addEventListener('click', e => !calcForm.hidden && !e.composedPath().includes(calcBox) && toggleCalc(false), true);
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || calcForm.hidden) return;
+  toggleCalc(false);
+  calcButton.focus();
+});
 
 Promise.all([
   chrome.storage.sync.get(DEFAULTS),
@@ -409,6 +552,6 @@ Promise.all([
     for (const k in changes) settings[k] = changes[k].newValue ?? DEFAULTS[k];
     render();
     if (changes.limit) refresh();
-    if (changes.sort || changes.sizeSort) sortListings();
+    if (Object.keys(SORTS).some(k => changes[k])) sortListings();
   });
 });
